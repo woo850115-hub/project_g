@@ -1,0 +1,1 @@
+/home/genos/workspace/project_g/rust_mud_engine/plugins/test_infinite_loop/target/wasm32-unknown-unknown/release/test_infinite_loop.wasm: /home/genos/workspace/project_g/rust_mud_engine/crates/plugin_abi/src/lib.rs /home/genos/workspace/project_g/rust_mud_engine/plugins/test_infinite_loop/src/lib.rs

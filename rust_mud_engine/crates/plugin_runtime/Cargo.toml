@@ -1,0 +1,17 @@
+[package]
+name = "plugin_runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+plugin_abi = { path = "../plugin_abi" }
+ecs_adapter = { path = "../ecs_adapter" }
+wasmtime = "41"
+postcard = "1"
+serde = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+bincode = { workspace = true }
+bevy_ecs = { version = "0.15", default-features = false }
