@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use ecs_adapter::{EcsAdapter, EntityId};
-use mlua::{AppDataRef, Function, Lua};
+use mlua::{AppDataRef, Function, Lua, LuaSerdeExt};
 use session::{SessionId, SessionManager, SessionOutput};
 use space::model::SpaceModel;
 use tracing::{info, warn};
@@ -12,6 +12,7 @@ use crate::api::output::OutputProxy;
 use crate::api::session::SessionProxy;
 use crate::api::space::{IntoSpaceKind, SpaceProxy};
 use crate::component_registry::ScriptComponentRegistry;
+use crate::content::ContentRegistry;
 use crate::error::ScriptError;
 use crate::hooks::{self, HookRegistry};
 use crate::sandbox::{self, ScriptConfig};
@@ -77,6 +78,26 @@ impl ScriptEngine {
     /// Get a reference to the component registry.
     pub fn component_registry(&self) -> &ScriptComponentRegistry {
         &self.component_registry
+    }
+
+    /// Register content data as a permanent Lua global table.
+    /// Called once at startup, before loading scripts.
+    /// Content is read-only — no proxy needed, just plain Lua tables.
+    pub fn register_content(&self, registry: &ContentRegistry) -> Result<(), ScriptError> {
+        let content_table = self.lua.create_table()?;
+
+        for (collection_name, items) in registry.collections() {
+            let col_table = self.lua.create_table()?;
+            for (id, value) in items {
+                let lua_val: mlua::Value = self.lua.to_value(value)?;
+                col_table.set(id.as_str(), lua_val)?;
+            }
+            content_table.set(collection_name.as_str(), col_table)?;
+        }
+
+        self.lua.globals().set("content", content_table)?;
+
+        Ok(())
     }
 
     /// Load and execute a Lua script by name and source code.
@@ -852,6 +873,124 @@ mod tests {
         let hp = ctx.ecs.get_component::<Health>(entity).unwrap();
         assert_eq!(hp.current, 9);
         assert_eq!(hp.max, 10);
+    }
+
+    #[test]
+    fn test_register_content_basic() {
+        let dir = std::env::temp_dir().join("engine_content_test_basic");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("monsters.json"),
+            r#"[{"id":"goblin","name":"Goblin","hp":30},{"id":"orc","name":"Orc","hp":80}]"#,
+        )
+        .unwrap();
+
+        let registry = ContentRegistry::load_dir(&dir).unwrap();
+        let mut engine = ScriptEngine::new(ScriptConfig::default()).unwrap();
+        engine.register_content(&registry).unwrap();
+
+        engine
+            .load_script(
+                "test",
+                r#"
+                hooks.on_init(function()
+                    local g = content.monsters.goblin
+                    output:send(1, g.name .. ":" .. tostring(g.hp))
+                end)
+            "#,
+            )
+            .unwrap();
+
+        let (mut ecs, mut space, sessions) = setup_world();
+        let mut ctx = ScriptContext {
+            ecs: &mut ecs,
+            space: &mut space,
+            sessions: &sessions,
+            tick: 0,
+        };
+        let outputs = engine.run_on_init(&mut ctx).unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].text, "Goblin:30");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_register_content_empty() {
+        let registry = ContentRegistry::new();
+        let mut engine = ScriptEngine::new(ScriptConfig::default()).unwrap();
+        engine.register_content(&registry).unwrap();
+
+        engine
+            .load_script(
+                "test",
+                r#"
+                hooks.on_init(function()
+                    if content.monsters == nil then
+                        output:send(1, "nil")
+                    else
+                        output:send(1, "exists")
+                    end
+                end)
+            "#,
+            )
+            .unwrap();
+
+        let (mut ecs, mut space, sessions) = setup_world();
+        let mut ctx = ScriptContext {
+            ecs: &mut ecs,
+            space: &mut space,
+            sessions: &sessions,
+            tick: 0,
+        };
+        let outputs = engine.run_on_init(&mut ctx).unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].text, "nil");
+    }
+
+    #[test]
+    fn test_content_accessible_from_hooks() {
+        let dir = std::env::temp_dir().join("engine_content_test_hooks");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("items.json"),
+            r#"[{"id":"potion","name":"Health Potion","heal":50}]"#,
+        )
+        .unwrap();
+
+        let registry = ContentRegistry::load_dir(&dir).unwrap();
+        let mut engine = ScriptEngine::new(ScriptConfig::default()).unwrap();
+        engine.register_content(&registry).unwrap();
+
+        // Test from on_tick hook (not just on_init)
+        engine
+            .load_script(
+                "test",
+                r#"
+                hooks.on_tick(function(tick)
+                    local p = content.items.potion
+                    if p then
+                        output:send(1, p.name .. ":" .. tostring(p.heal))
+                    end
+                end)
+            "#,
+            )
+            .unwrap();
+
+        let (mut ecs, mut space, sessions) = setup_world();
+        let mut ctx = ScriptContext {
+            ecs: &mut ecs,
+            space: &mut space,
+            sessions: &sessions,
+            tick: 1,
+        };
+        let outputs = engine.run_on_tick(&mut ctx).unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].text, "Health Potion:50");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

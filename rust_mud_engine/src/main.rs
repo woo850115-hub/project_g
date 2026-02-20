@@ -16,7 +16,7 @@ use persistence::manager::SnapshotManager;
 use persistence::registry::PersistenceRegistry;
 use persistence::snapshot;
 use scripting::engine::{ScriptContext, ScriptEngine};
-use scripting::ScriptConfig;
+use scripting::{ContentRegistry, ScriptConfig};
 use space::grid_space::GridConfig;
 use space::RoomGraphSpace;
 use space::SpaceModel;
@@ -27,6 +27,7 @@ const SNAPSHOT_INTERVAL: u64 = 300; // Every 300 ticks
 const SAVE_DIR: &str = "data/snapshots";
 const SCRIPTS_DIR: &str = "scripts";
 const GRID_SCRIPTS_DIR: &str = "scripts_grid";
+const CONTENT_DIR: &str = "content";
 const WEB_STATIC_DIR: &str = "web_dist";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -178,6 +179,24 @@ fn run_grid_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx) {
             std::process::exit(1);
         }
     };
+
+    // Load content from content/ directory if it exists
+    let content_path = Path::new(CONTENT_DIR);
+    if content_path.is_dir() {
+        match ContentRegistry::load_dir(content_path) {
+            Ok(registry) => {
+                tracing::info!(
+                    collections = registry.collection_names().len(),
+                    items = registry.total_count(),
+                    "Content loaded"
+                );
+                if let Err(e) = script_engine.register_content(&registry) {
+                    tracing::warn!("Failed to register content in Lua: {}", e);
+                }
+            }
+            Err(e) => tracing::warn!("Failed to load content: {}", e),
+        }
+    }
 
     // Load grid scripts (prefer scripts_grid/, fall back to scripts/)
     let grid_scripts_path = Path::new(GRID_SCRIPTS_DIR);
@@ -607,6 +626,24 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx) {
 
     // Register MUD components with the script engine
     register_mud_script_components(script_engine.component_registry_mut());
+
+    // Load content from content/ directory if it exists
+    let content_path = Path::new(CONTENT_DIR);
+    if content_path.is_dir() {
+        match ContentRegistry::load_dir(content_path) {
+            Ok(registry) => {
+                tracing::info!(
+                    collections = registry.collection_names().len(),
+                    items = registry.total_count(),
+                    "Content loaded"
+                );
+                if let Err(e) = script_engine.register_content(&registry) {
+                    tracing::warn!("Failed to register content in Lua: {}", e);
+                }
+            }
+            Err(e) => tracing::warn!("Failed to load content: {}", e),
+        }
+    }
 
     // Load scripts from scripts/ directory if it exists
     let scripts_path = Path::new(SCRIPTS_DIR);

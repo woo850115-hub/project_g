@@ -78,9 +78,9 @@ Rust 기반 MUD/2D MMORPG 겸용 게임 엔진. 단일 서버 코어로 Text MUD
 - 전체 구현 계획: `docs/rust_mud_2d_engine_implementation_plan_20260219.md`
 - Phase 1 구현 계획: `docs/phase1_implementation_plan.md`
 - Phase 3 구현 계획: `docs/phase3_implementation_plan.md`
-- DB 설계: `docs/database_design.md`
-- 엔티티 정의서: `docs/entity_definition.md`
-- 엔티티 속성 정의서: `docs/entity_attributes.md`
+- 데이터 설계: `docs/database_design.md` (콘텐츠=JSON 파일, 플레이어=SQLite, 엔진-게임 분리 현황)
+- 엔티티 정의서: `docs/entity_definition.md` (계층별 [C]/[R]/[P] 구분, 공유 정의 분리)
+- 속성 카탈로그: `docs/attribute_catalog.md` (열거형 속성값 + 공통 속성 사전)
 
 ## 코드 구조
 
@@ -200,6 +200,8 @@ Lua 스크립트는 tick 스레드에서 직접 실행, ECS/Space에 직접 읽�
 6. **단일 쓰기 스레드**: Tick thread만 World 상태 수정 가능. async에서 직접 접근 금지
 7. **EntityId = generation + index**: 단순 u64 증가 아닌 세대 기반 (Snapshot 복원 안전)
 8. **Lua 스크립트 = 샌드박스**: 메모리 제한(16MB), 명령어 제한(1M), require 금지. 게임메이커 보안 보장
+9. **엔진-게임 완전 분리**: 엔진 crate(engine_core, scripting, persistence, net, space, session)는 게임별 스키마(MonsterDef, ItemDef 등)를 모름. 게임 데이터는 동적 처리(serde_json::Value), 게임 로직은 Lua
+10. **콘텐츠 = JSON 파일, DB = 플레이어만**: 게임 정의 데이터(몬스터/아이템/스킬 등)는 content/*.json, SQLite는 계정/캐릭터/길드 영속성 전용
 
 ## 빌드 & 테스트
 
