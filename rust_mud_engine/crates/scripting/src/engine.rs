@@ -34,6 +34,15 @@ pub struct ActionInfo {
     pub entity: EntityId,
 }
 
+/// Represents an admin command for on_admin hooks.
+pub struct AdminInfo {
+    pub command: String,
+    pub args: String,
+    pub session_id: SessionId,
+    pub entity: EntityId,
+    pub permission: i32,
+}
+
 /// The main script engine managing a Luau VM and hook registry.
 pub struct ScriptEngine {
     lua: Lua,
@@ -435,6 +444,83 @@ impl ScriptEngine {
         })?;
 
         Ok(outputs)
+    }
+
+    /// Run on_admin hooks for an admin command.
+    /// Permission is checked in Rust before calling Lua callbacks.
+    /// Returns (outputs, handled) where handled=true if a matching hook was found and executed.
+    pub fn run_on_admin<S: SpaceModel + IntoSpaceKind>(
+        &self,
+        ctx: &mut ScriptContext<'_, S>,
+        admin: &AdminInfo,
+    ) -> Result<(Vec<SessionOutput>, bool), ScriptError> {
+        let hooks = self.lua.app_data_ref::<HookRegistry>().unwrap();
+        let entries = hooks.on_admin.get(&admin.command);
+        if entries.is_none() || entries.unwrap().is_empty() {
+            return Ok((Vec::new(), false));
+        }
+        drop(hooks);
+
+        let mut outputs = Vec::new();
+        let mut handled = false;
+
+        sandbox::reset_instruction_counter(&self.lua, &self.config);
+
+        self.lua.scope(|scope| {
+            let ecs_proxy = unsafe {
+                EcsProxy::new(
+                    ctx.ecs as *mut EcsAdapter,
+                    &self.component_registry as *const ScriptComponentRegistry,
+                )
+            };
+            let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
+            let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *const SessionManager) };
+
+            let ecs_ud = scope.create_userdata(ecs_proxy)?;
+            let space_ud = scope.create_userdata(space_proxy)?;
+            let output_ud = scope.create_userdata(output_proxy)?;
+            let session_ud = scope.create_userdata(session_proxy)?;
+
+            self.lua.globals().set("ecs", ecs_ud)?;
+            self.lua.globals().set("space", space_ud)?;
+            self.lua.globals().set("output", output_ud)?;
+            self.lua.globals().set("sessions", session_ud)?;
+
+            let admin_ctx = self.lua.create_table()?;
+            admin_ctx.set("session_id", admin.session_id.0)?;
+            admin_ctx.set("entity", admin.entity.to_u64())?;
+            admin_ctx.set("command", admin.command.as_str())?;
+            admin_ctx.set("args", admin.args.as_str())?;
+            admin_ctx.set("permission", admin.permission)?;
+
+            let hooks = self.lua.app_data_ref::<HookRegistry>().unwrap();
+            if let Some(entries) = hooks.on_admin.get(&admin.command) {
+                for entry in entries {
+                    // Permission check in Rust (security guarantee)
+                    if admin.permission < entry.min_permission {
+                        continue;
+                    }
+                    let func: Function = self.lua.registry_value(&entry.callback)?;
+                    match func.call::<mlua::Value>(admin_ctx.clone()) {
+                        Ok(mlua::Value::Boolean(true)) => {
+                            handled = true;
+                            break;
+                        }
+                        Ok(_) => {
+                            handled = true;
+                        }
+                        Err(e) => {
+                            warn!("on_admin('{}') hook error: {}", admin.command, e);
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        })?;
+
+        Ok((outputs, handled))
     }
 
     /// Get a reference to the underlying Lua VM.

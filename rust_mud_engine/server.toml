@@ -1,0 +1,47 @@
+# Rust MUD Engine — Server Configuration
+# All values shown below are defaults. Uncomment and modify as needed.
+
+# Server mode: "mud" (Telnet text MUD) or "grid" (2D WebSocket)
+# Can be overridden via CLI: --mode mud|grid
+# mode = "mud"
+
+# [net]
+# telnet_addr = "0.0.0.0:4000"       # MUD mode Telnet listener
+# ws_addr = "0.0.0.0:4001"           # Grid mode WebSocket + HTTP listener
+# max_connections = 1000              # Maximum total connections
+# web_static_dir = "web_dist"        # Static files directory for Grid mode
+
+# [tick]
+# tps = 10                           # Ticks per second
+
+# [persistence]
+# snapshot_interval = 300            # Ticks between world snapshots (300 = 30s at 10 TPS)
+# save_dir = "data/snapshots"        # Snapshot storage directory
+
+# [scripting]
+# scripts_dir = "scripts"            # Lua scripts directory (MUD mode)
+# grid_scripts_dir = "scripts_grid"  # Lua scripts directory (Grid mode, falls back to scripts_dir)
+# content_dir = "content"            # JSON content definitions directory
+# memory_limit_kb = 16384            # Lua VM memory limit in KB (16 MB)
+# instruction_limit = 1000000        # Lua VM instruction limit per execution
+
+# [grid]
+# width = 256                        # Grid width in cells
+# height = 256                       # Grid height in cells
+# origin_x = 0                       # Minimum X coordinate
+# origin_y = 0                       # Minimum Y coordinate
+# aoi_radius = 32                    # Area of Interest radius (Chebyshev distance)
+
+# [database]
+# path = "data/player.db"            # SQLite database file path
+# auth_required = false              # Require account login (false = quick-play mode)
+
+# [security]
+# max_connections_total = 1000       # Total connection limit
+# max_connections_per_ip = 5         # Per-IP connection limit
+# max_commands_per_second = 20       # Per-session command rate limit
+# max_input_length = 4096            # Maximum input line length in bytes
+
+# [character]
+# save_interval = 600                # Ticks between character auto-saves (600 = 60s at 10 TPS)
+# linger_timeout_secs = 60           # Seconds to keep entity alive after disconnect

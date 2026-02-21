@@ -59,16 +59,16 @@ hooks.on_tick(function(tick)
             local tgt_name = get_name(round.target)
             local display_hp = math.max(new_hp, 0)
 
-            -- Notify attacker
+            -- Notify attacker (yellow damage)
             local atk_sid = sessions:session_for(round.attacker)
             if atk_sid then
-                output:send(atk_sid, tgt_name .. "에게 " .. tostring(damage) .. " 데미지를 입혔습니다. (" .. tostring(display_hp) .. "/" .. tostring(hp.max) .. ")")
+                output:send(atk_sid, tgt_name .. "에게 " .. colors.yellow .. tostring(damage) .. " 데미지" .. colors.reset .. "를 입혔습니다. (" .. tostring(display_hp) .. "/" .. tostring(hp.max) .. ")")
             end
 
-            -- Notify target
+            -- Notify target (red damage)
             local tgt_sid = sessions:session_for(round.target)
             if tgt_sid then
-                output:send(tgt_sid, atk_name .. "이(가) 당신에게 " .. tostring(damage) .. " 데미지를 입혔습니다. (" .. tostring(display_hp) .. "/" .. tostring(hp.max) .. ")")
+                output:send(tgt_sid, atk_name .. "이(가) 당신에게 " .. colors.red .. tostring(damage) .. " 데미지" .. colors.reset .. "를 입혔습니다. (" .. tostring(display_hp) .. "/" .. tostring(hp.max) .. ")")
             end
 
             -- Broadcast to room (exclude attacker and target)
@@ -103,7 +103,7 @@ hooks.on_tick(function(tick)
         -- Notify dead entity if player
         local dead_sid = sessions:session_for(dead_entity)
         if dead_sid then
-            output:send(dead_sid, "당신은 죽었습니다!")
+            output:send(dead_sid, colors.bold .. colors.red .. "당신은 죽었습니다!" .. colors.reset)
         end
 
         -- Broadcast death to room
@@ -114,7 +114,7 @@ hooks.on_tick(function(tick)
                 if occ ~= dead_entity then
                     local sid = sessions:session_for(occ)
                     if sid then
-                        output:send(sid, dead_name .. "이(가) 쓰러졌습니다!")
+                        output:send(sid, colors.red .. dead_name .. "이(가) 쓰러졌습니다!" .. colors.reset)
                     end
                 end
             end

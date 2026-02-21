@@ -2,6 +2,12 @@ use mlua::{Function, Lua, RegistryKey, Result as LuaResult};
 use std::collections::HashMap;
 use tracing::warn;
 
+/// An admin hook entry: callback + minimum required permission level.
+pub struct AdminHookEntry {
+    pub callback: RegistryKey,
+    pub min_permission: i32,
+}
+
 /// Registry of Lua callbacks organized by event type.
 pub struct HookRegistry {
     /// on_init callbacks — called once at startup
@@ -14,6 +20,8 @@ pub struct HookRegistry {
     pub on_enter_room: Vec<RegistryKey>,
     /// on_connect callbacks — called with (session_id)
     pub on_connect: Vec<RegistryKey>,
+    /// on_admin callbacks — keyed by command name, with min permission
+    pub on_admin: HashMap<String, Vec<AdminHookEntry>>,
 }
 
 impl HookRegistry {
@@ -24,6 +32,7 @@ impl HookRegistry {
             on_action: HashMap::new(),
             on_enter_room: Vec::new(),
             on_connect: Vec::new(),
+            on_admin: HashMap::new(),
         }
     }
 
@@ -33,6 +42,7 @@ impl HookRegistry {
         self.on_action.clear();
         self.on_enter_room.clear();
         self.on_connect.clear();
+        self.on_admin.clear();
     }
 
     pub fn on_init_count(&self) -> usize {
@@ -53,6 +63,10 @@ impl HookRegistry {
 
     pub fn on_connect_count(&self) -> usize {
         self.on_connect.len()
+    }
+
+    pub fn on_admin_count(&self) -> usize {
+        self.on_admin.values().map(|v| v.len()).sum()
     }
 }
 
@@ -118,6 +132,22 @@ pub fn register_hooks_api(lua: &Lua) -> LuaResult<()> {
     })?;
     hooks_table.set("on_connect", on_connect_fn)?;
 
+    // hooks.on_admin(command_name, min_permission, fn)
+    let on_admin_fn = lua.create_function(|lua, (command, min_perm, func): (String, i32, Function)| {
+        let key = lua.create_registry_value(func)?;
+        lua.app_data_mut::<HookRegistry>()
+            .expect("HookRegistry not set")
+            .on_admin
+            .entry(command)
+            .or_default()
+            .push(AdminHookEntry {
+                callback: key,
+                min_permission: min_perm,
+            });
+        Ok(())
+    })?;
+    hooks_table.set("on_admin", on_admin_fn)?;
+
     // hooks.fire_enter_room(entity_id, room_id, old_room_id_or_nil)
     // Allows Lua scripts to trigger on_enter_room hooks (e.g., after movement).
     let fire_enter_room_fn =
@@ -158,5 +188,6 @@ mod tests {
         assert_eq!(registry.on_action_count(), 0);
         assert_eq!(registry.on_enter_room_count(), 0);
         assert_eq!(registry.on_connect_count(), 0);
+        assert_eq!(registry.on_admin_count(), 0);
     }
 }

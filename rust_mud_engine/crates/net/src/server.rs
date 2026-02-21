@@ -18,11 +18,49 @@ pub async fn run_tcp_server(
     register_tx: RegisterTx,
     unregister_tx: UnregisterTx,
 ) -> Result<(), std::io::Error> {
+    run_tcp_server_inner(addr, player_tx, register_tx, unregister_tx, None).await
+}
+
+/// Run the TCP server with optional shutdown receiver.
+pub async fn run_tcp_server_with_shutdown(
+    addr: String,
+    player_tx: PlayerTx,
+    register_tx: RegisterTx,
+    unregister_tx: UnregisterTx,
+    shutdown_rx: tokio::sync::watch::Receiver<bool>,
+) -> Result<(), std::io::Error> {
+    run_tcp_server_inner(addr, player_tx, register_tx, unregister_tx, Some(shutdown_rx)).await
+}
+
+async fn run_tcp_server_inner(
+    addr: String,
+    player_tx: PlayerTx,
+    register_tx: RegisterTx,
+    unregister_tx: UnregisterTx,
+    mut shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
+) -> Result<(), std::io::Error> {
     let listener = TcpListener::bind(&addr).await?;
     tracing::info!("TCP server listening on {}", addr);
 
     loop {
-        let (stream, peer_addr) = listener.accept().await?;
+        let accepted = if let Some(ref mut rx) = shutdown_rx {
+            tokio::select! {
+                result = listener.accept() => Some(result),
+                _ = wait_shutdown(rx) => None,
+            }
+        } else {
+            Some(listener.accept().await)
+        };
+
+        let (stream, peer_addr) = match accepted {
+            Some(Ok(pair)) => pair,
+            Some(Err(e)) => return Err(e),
+            None => {
+                tracing::info!("TCP server shutting down");
+                return Ok(());
+            }
+        };
+
         let session_id = SessionId(NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed));
 
         tracing::info!(?session_id, %peer_addr, "New connection");
@@ -34,6 +72,14 @@ pub async fn run_tcp_server(
         tokio::spawn(async move {
             handle_session(stream, session_id, player_tx, register_tx, unregister_tx).await;
         });
+    }
+}
+
+async fn wait_shutdown(rx: &mut tokio::sync::watch::Receiver<bool>) {
+    while !*rx.borrow() {
+        if rx.changed().await.is_err() {
+            return;
+        }
     }
 }
 

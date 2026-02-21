@@ -134,6 +134,7 @@ fn run_grid_tick(
                         }
                     }
                     SessionState::Disconnected => {}
+                    _ => {} // AwaitingPassword, etc. not used in grid tests
                 }
             }
             NetToTick::Disconnected { session_id } => {

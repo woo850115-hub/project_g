@@ -44,6 +44,7 @@ pub enum PlayerAction {
     Who,
     Quit,
     Help,
+    Admin { command: String, args: String },
     Unknown(String),
 }
 
@@ -52,6 +53,18 @@ pub fn parse_input(input: &str) -> PlayerAction {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return PlayerAction::Look;
+    }
+
+    // Admin commands start with /
+    if trimmed.starts_with('/') {
+        let without_slash = &trimmed[1..];
+        let mut parts = without_slash.splitn(2, ' ');
+        let command = parts.next().unwrap_or("").to_lowercase();
+        let args = parts.next().unwrap_or("").trim().to_string();
+        if command.is_empty() {
+            return PlayerAction::Unknown("/".to_string());
+        }
+        return PlayerAction::Admin { command, args };
     }
 
     let lower = trimmed.to_lowercase();
@@ -196,6 +209,39 @@ mod tests {
     fn parse_whitespace_handling() {
         assert_eq!(parse_input("  north  "), PlayerAction::Move(Direction::North));
         assert_eq!(parse_input("  attack   goblin  "), PlayerAction::Attack("goblin".to_string()));
+    }
+
+    #[test]
+    fn parse_admin_commands() {
+        assert_eq!(
+            parse_input("/kick TestUser"),
+            PlayerAction::Admin {
+                command: "kick".to_string(),
+                args: "TestUser".to_string(),
+            }
+        );
+        assert_eq!(
+            parse_input("/announce Hello everyone!"),
+            PlayerAction::Admin {
+                command: "announce".to_string(),
+                args: "Hello everyone!".to_string(),
+            }
+        );
+        assert_eq!(
+            parse_input("/stats"),
+            PlayerAction::Admin {
+                command: "stats".to_string(),
+                args: String::new(),
+            }
+        );
+        assert_eq!(
+            parse_input("/TELEPORT Player 시작의 방"),
+            PlayerAction::Admin {
+                command: "teleport".to_string(),
+                args: "Player 시작의 방".to_string(),
+            }
+        );
+        assert_eq!(parse_input("/"), PlayerAction::Unknown("/".to_string()));
     }
 
     #[test]

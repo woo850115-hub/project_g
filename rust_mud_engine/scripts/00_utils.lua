@@ -1,5 +1,30 @@
 -- 00_utils.lua: Common helper functions for MUD game scripts
 
+-- ANSI color code table for text formatting
+colors = {
+    reset     = "\27[0m",
+    bold      = "\27[1m",
+    dim       = "\27[2m",
+    underline = "\27[4m",
+    -- Standard foreground
+    black   = "\27[30m",
+    red     = "\27[31m",
+    green   = "\27[32m",
+    yellow  = "\27[33m",
+    blue    = "\27[34m",
+    magenta = "\27[35m",
+    cyan    = "\27[36m",
+    white   = "\27[37m",
+    -- Bright foreground
+    bright_red     = "\27[91m",
+    bright_green   = "\27[92m",
+    bright_yellow  = "\27[93m",
+    bright_blue    = "\27[94m",
+    bright_magenta = "\27[95m",
+    bright_cyan    = "\27[96m",
+    bright_white   = "\27[97m",
+}
+
 -- Direction mapping tables
 DIRECTION_KO = {
     north = "북",
@@ -76,9 +101,9 @@ end
 function format_room(room_id, viewer)
     local lines = {}
 
-    -- Room name
+    -- Room name (bold cyan)
     local room_name = ecs:get(room_id, "Name") or "알 수 없는 방"
-    table.insert(lines, "== " .. room_name .. " ==")
+    table.insert(lines, colors.bold .. colors.cyan .. "== " .. room_name .. " ==" .. colors.reset)
 
     -- Room description
     local desc = ecs:get(room_id, "Description")
@@ -86,8 +111,8 @@ function format_room(room_id, viewer)
         table.insert(lines, desc)
     end
 
-    -- Exits
-    table.insert(lines, "출구: " .. format_exits(room_id))
+    -- Exits (green)
+    table.insert(lines, colors.green .. "출구: " .. format_exits(room_id) .. colors.reset)
 
     -- Other entities in the room
     local occupants = space:room_occupants(room_id)

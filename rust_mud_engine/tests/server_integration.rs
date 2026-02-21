@@ -98,6 +98,7 @@ fn run_test_ticks(
                                 }
                             }
                             SessionState::Disconnected => {}
+                            _ => {} // AwaitingPassword, etc. not used in quick-play tests
                         }
                     }
                 }

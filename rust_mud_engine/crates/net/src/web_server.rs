@@ -35,6 +35,29 @@ pub async fn run_web_server(
     unregister_tx: UnregisterTx,
     static_dir: Option<PathBuf>,
 ) -> Result<(), std::io::Error> {
+    run_web_server_inner(addr, player_tx, register_tx, unregister_tx, static_dir, None).await
+}
+
+/// Run the web server with optional shutdown receiver.
+pub async fn run_web_server_with_shutdown(
+    addr: String,
+    player_tx: PlayerTx,
+    register_tx: RegisterTx,
+    unregister_tx: UnregisterTx,
+    static_dir: Option<PathBuf>,
+    shutdown_rx: tokio::sync::watch::Receiver<bool>,
+) -> Result<(), std::io::Error> {
+    run_web_server_inner(addr, player_tx, register_tx, unregister_tx, static_dir, Some(shutdown_rx)).await
+}
+
+async fn run_web_server_inner(
+    addr: String,
+    player_tx: PlayerTx,
+    register_tx: RegisterTx,
+    unregister_tx: UnregisterTx,
+    static_dir: Option<PathBuf>,
+    shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
+) -> Result<(), std::io::Error> {
     let state = AppState {
         next_session_id: Arc::new(AtomicU64::new(1_000_000)),
         player_tx,
@@ -56,9 +79,23 @@ pub async fn run_web_server(
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Web server listening on {}", addr);
 
-    axum::serve(listener, app)
-        .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    if let Some(mut rx) = shutdown_rx {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                while !*rx.borrow() {
+                    if rx.changed().await.is_err() {
+                        return;
+                    }
+                }
+                tracing::info!("Web server shutting down gracefully");
+            })
+            .await
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    } else {
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    }
 }
 
 async fn ws_upgrade_handler(

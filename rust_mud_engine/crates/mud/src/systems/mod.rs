@@ -87,6 +87,7 @@ fn action_to_lua_info(action: &PlayerAction) -> (String, String) {
         PlayerAction::Who => ("who".to_string(), String::new()),
         PlayerAction::Quit => ("quit".to_string(), String::new()),
         PlayerAction::Help => ("help".to_string(), String::new()),
+        PlayerAction::Admin { ref command, ref args } => ("admin".to_string(), format!("{} {}", command, args)),
         PlayerAction::Unknown(text) => ("unknown".to_string(), text.clone()),
     }
 }
