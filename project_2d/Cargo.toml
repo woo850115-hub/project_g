@@ -1,0 +1,34 @@
+[package]
+name = "project_2d"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "grid_server"
+path = "src/main.rs"
+
+[lib]
+name = "project_2d"
+path = "src/lib.rs"
+
+[dependencies]
+ecs_adapter = { workspace = true }
+engine_core = { workspace = true }
+space = { workspace = true }
+observability = { workspace = true }
+session = { workspace = true }
+scripting = { workspace = true }
+net = { workspace = true }
+bevy_ecs = { version = "0.15", default-features = false }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+persistence = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }

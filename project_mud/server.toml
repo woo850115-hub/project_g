@@ -1,0 +1,29 @@
+# MUD Server Configuration
+# Paths are relative to the working directory (project root).
+
+[persistence]
+save_dir = "project_mud/data/snapshots"
+
+[scripting]
+scripts_dir = "project_mud/scripts"
+content_dir = "project_mud/content"
+
+[database]
+path = "project_mud/data/player.db"
+
+# [net]
+# telnet_addr = "0.0.0.0:4000"
+# max_connections = 1000
+
+# [tick]
+# tps = 10
+
+# [security]
+# max_connections_total = 1000
+# max_connections_per_ip = 5
+# max_commands_per_second = 20
+# max_input_length = 4096
+
+# [character]
+# save_interval = 600
+# linger_timeout_secs = 60

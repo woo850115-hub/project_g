@@ -1,0 +1,48 @@
+[workspace]
+resolver = "2"
+members = [
+    "engine/crates/ecs_adapter",
+    "engine/crates/engine_core",
+    "engine/crates/space",
+    "engine/crates/observability",
+    "engine/crates/plugin_abi",
+    "engine/crates/plugin_runtime",
+    "engine/crates/session",
+    "engine/crates/scripting",
+    "engine/crates/persistence",
+    "engine/crates/net",
+    "project_mud",
+    "project_mud/crates/mud",
+    "project_mud/crates/player_db",
+    "project_2d",
+]
+exclude = ["plugins/test_movement", "plugins/test_infinite_loop", "plugins/test_panic"]
+
+[workspace.dependencies]
+# Engine crates (workspace = true reference)
+ecs_adapter = { path = "engine/crates/ecs_adapter" }
+engine_core = { path = "engine/crates/engine_core" }
+space = { path = "engine/crates/space" }
+observability = { path = "engine/crates/observability" }
+plugin_abi = { path = "engine/crates/plugin_abi" }
+plugin_runtime = { path = "engine/crates/plugin_runtime" }
+session = { path = "engine/crates/session" }
+scripting = { path = "engine/crates/scripting" }
+persistence = { path = "engine/crates/persistence" }
+net = { path = "engine/crates/net" }
+mud = { path = "project_mud/crates/mud" }
+player_db = { path = "project_mud/crates/player_db" }
+
+# External dependencies
+serde = { version = "1", features = ["derive"] }
+bincode = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2"
+postcard = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+serde_json = "1"
+futures-util = "0.3"
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["fs"] }

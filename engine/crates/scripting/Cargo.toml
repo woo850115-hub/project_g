@@ -1,0 +1,18 @@
+[package]
+name = "scripting"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ecs_adapter = { workspace = true }
+space = { workspace = true }
+session = { workspace = true }
+mlua = { version = "0.10", features = ["luau", "vendored", "send", "serialize"] }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = "1"
+toml = "0.8"
+
+[dev-dependencies]
+bevy_ecs = { version = "0.15", default-features = false }

@@ -1,8 +1,0 @@
-[package]
-name = "session"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ecs_adapter = { path = "../ecs_adapter" }
-serde = { workspace = true }

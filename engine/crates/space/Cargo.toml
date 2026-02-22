@@ -1,0 +1,13 @@
+[package]
+name = "space"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ecs_adapter = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+bincode = { workspace = true }

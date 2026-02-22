@@ -1,0 +1,29 @@
+# Grid Server Configuration
+# Paths are relative to the working directory (project root).
+
+[net]
+web_static_dir = "project_2d/web_dist"
+
+[scripting]
+scripts_dir = "project_2d/scripts"
+grid_scripts_dir = "project_2d/scripts_grid"
+content_dir = "project_2d/content"
+
+# ws_addr = "0.0.0.0:4001"
+# max_connections = 1000
+
+# [tick]
+# tps = 10
+
+# [grid]
+# width = 256
+# height = 256
+# origin_x = 0
+# origin_y = 0
+# aoi_radius = 32
+
+# [security]
+# max_connections_total = 1000
+# max_connections_per_ip = 5
+# max_commands_per_second = 20
+# max_input_length = 4096
