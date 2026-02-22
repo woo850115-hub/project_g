@@ -1,1 +1,0 @@
-/home/genos/workspace/project_g/rust_mud_engine/plugins/test_panic/target/wasm32-unknown-unknown/release/test_panic.wasm: /home/genos/workspace/project_g/rust_mud_engine/crates/plugin_abi/src/lib.rs /home/genos/workspace/project_g/rust_mud_engine/plugins/test_panic/src/lib.rs
