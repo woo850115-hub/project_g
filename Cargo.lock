@@ -1747,6 +1747,7 @@ name = "project_mud_maker"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "futures-util",
  "maker_common",
  "serde",
  "serde_json",

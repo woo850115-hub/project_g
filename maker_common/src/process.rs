@@ -1,6 +1,7 @@
 //! Game server process management — shared between MUD and 2D game makers.
 //!
-//! Manages starting/stopping a game server as a child process.
+//! Manages starting/stopping a game server as a child process,
+//! with stdout/stderr capture for log streaming.
 
 use axum::{
     extract::State,
@@ -11,14 +12,23 @@ use axum::{
 };
 use serde_json::Value;
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
+
+/// A log line captured from the server process.
+#[derive(Debug, Clone)]
+pub struct LogLine {
+    pub text: String,
+}
 
 /// Shared state for a managed game server process.
 #[derive(Clone)]
 pub struct ProcessManager {
     inner: Arc<Mutex<ProcessInner>>,
+    log_tx: broadcast::Sender<LogLine>,
 }
 
 struct ProcessInner {
@@ -30,6 +40,7 @@ struct ProcessInner {
 
 impl ProcessManager {
     pub fn new(package_name: &str, config_path: PathBuf, extra_args: Vec<String>) -> Self {
+        let (log_tx, _) = broadcast::channel(256);
         Self {
             inner: Arc::new(Mutex::new(ProcessInner {
                 child: None,
@@ -37,7 +48,13 @@ impl ProcessManager {
                 config_path,
                 extra_args,
             })),
+            log_tx,
         }
+    }
+
+    /// Subscribe to log output from the server process.
+    pub fn subscribe_logs(&self) -> broadcast::Receiver<LogLine> {
+        self.log_tx.subscribe()
     }
 
     pub async fn status(&self) -> Value {
@@ -95,11 +112,37 @@ impl ProcessManager {
             cmd.arg(arg);
         }
 
-        cmd.kill_on_drop(true);
+        cmd.stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
 
         match cmd.spawn() {
-            Ok(child) => {
+            Ok(mut child) => {
                 let pid = child.id().unwrap_or(0);
+
+                // Spawn tasks to capture stdout and stderr
+                if let Some(stdout) = child.stdout.take() {
+                    let tx = self.log_tx.clone();
+                    tokio::spawn(async move {
+                        let reader = BufReader::new(stdout);
+                        let mut lines = reader.lines();
+                        while let Ok(Some(line)) = lines.next_line().await {
+                            let _ = tx.send(LogLine { text: line });
+                        }
+                    });
+                }
+
+                if let Some(stderr) = child.stderr.take() {
+                    let tx = self.log_tx.clone();
+                    tokio::spawn(async move {
+                        let reader = BufReader::new(stderr);
+                        let mut lines = reader.lines();
+                        while let Ok(Some(line)) = lines.next_line().await {
+                            let _ = tx.send(LogLine { text: line });
+                        }
+                    });
+                }
+
                 inner.child = Some(child);
                 Ok(serde_json::json!({"ok": true, "pid": pid}))
             }
@@ -177,7 +220,6 @@ async fn server_stop<S: HasProcessManager>(State(state): State<S>) -> impl IntoR
 async fn server_restart<S: HasProcessManager>(State(state): State<S>) -> impl IntoResponse {
     let pm = state.process_manager();
     let _ = pm.stop().await;
-    // Brief delay to ensure port is released
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     match pm.start().await {
         Ok(v) => (StatusCode::OK, Json(v)),

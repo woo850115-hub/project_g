@@ -48,3 +48,10 @@ impl HasProcessManager for AppState {
         &self.process
     }
 }
+
+impl AppState {
+    /// Get the MUD server telnet address for the preview proxy.
+    pub fn telnet_addr(&self) -> String {
+        self.config.project.telnet_addr.clone()
+    }
+}

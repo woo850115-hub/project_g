@@ -23,6 +23,8 @@ pub struct ProjectSection {
     pub mud_dir: String,
     #[serde(default = "default_mud_config")]
     pub mud_config: String,
+    #[serde(default = "default_telnet_addr")]
+    pub telnet_addr: String,
 }
 
 fn default_server() -> ServerSection {
@@ -36,7 +38,12 @@ fn default_project() -> ProjectSection {
     ProjectSection {
         mud_dir: default_mud_dir(),
         mud_config: default_mud_config(),
+        telnet_addr: default_telnet_addr(),
     }
+}
+
+fn default_telnet_addr() -> String {
+    "127.0.0.1:4000".to_string()
 }
 
 fn default_addr() -> String {
@@ -68,9 +75,5 @@ impl MudMakerConfig {
 
     pub fn scripts_dir(&self) -> PathBuf {
         PathBuf::from(&self.project.mud_dir).join("scripts")
-    }
-
-    pub fn world_file(&self) -> PathBuf {
-        PathBuf::from(&self.project.mud_dir).join("world.json")
     }
 }
