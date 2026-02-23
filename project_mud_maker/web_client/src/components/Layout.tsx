@@ -9,11 +9,11 @@ interface LayoutProps {
 }
 
 const tabs: { id: TabId; label: string }[] = [
-  { id: 'map', label: 'Map' },
-  { id: 'database', label: 'Database' },
-  { id: 'triggers', label: 'Triggers' },
-  { id: 'scripts', label: 'Scripts' },
-  { id: 'preview', label: 'Preview' },
+  { id: 'map', label: '\uB9F5' },
+  { id: 'database', label: '\uB370\uC774\uD130\uBCA0\uC774\uC2A4' },
+  { id: 'triggers', label: '\uD2B8\uB9AC\uAC70' },
+  { id: 'scripts', label: '\uC2A4\uD06C\uB9BD\uD2B8' },
+  { id: 'preview', label: '\uBBF8\uB9AC\uBCF4\uAE30' },
 ];
 
 export function Layout({ activeTab, onTabChange, children }: LayoutProps) {
@@ -21,7 +21,7 @@ export function Layout({ activeTab, onTabChange, children }: LayoutProps) {
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
       {/* Header */}
       <header className="flex items-center border-b border-gray-700 bg-gray-800 px-4">
-        <h1 className="text-lg font-bold mr-8 py-3">MUD Game Maker</h1>
+        <h1 className="text-lg font-bold mr-8 py-3">MUD 게임 메이커</h1>
         <nav className="flex gap-1">
           {tabs.map((tab) => (
             <button
@@ -44,7 +44,7 @@ export function Layout({ activeTab, onTabChange, children }: LayoutProps) {
 
       {/* Status bar */}
       <footer className="flex items-center gap-4 px-4 py-1.5 text-xs text-gray-500 border-t border-gray-700 bg-gray-800">
-        <span>MUD Game Maker v0.1</span>
+        <span>MUD 게임 메이커 v0.1</span>
       </footer>
     </div>
   );

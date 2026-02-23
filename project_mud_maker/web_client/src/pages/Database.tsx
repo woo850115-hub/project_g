@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { contentApi } from '../api/client';
 import type { ContentItem } from '../types/content';
 import { PromptDialog, ConfirmDialog } from '../components/Modal';
+import { Tooltip } from '../components/Tooltip';
 
 export function Database() {
   const [collections, setCollections] = useState<string[]>([]);
@@ -29,7 +30,7 @@ export function Database() {
         setActiveCollection(cols[0]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      setError(e instanceof Error ? e.message : '\uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
     }
   }, [activeCollection]);
 
@@ -42,7 +43,7 @@ export function Database() {
       setActiveItemId(null);
       setEditData({});
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load items');
+      setError(e instanceof Error ? e.message : '\uC544\uC774\uD15C \uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
     }
   }, [activeCollection]);
 
@@ -80,7 +81,7 @@ export function Database() {
         setEditData({ ...updated });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(e instanceof Error ? e.message : '\uC800\uC7A5 \uC2E4\uD328');
     } finally {
       setSaving(false);
     }
@@ -96,7 +97,7 @@ export function Database() {
       setActiveItemId(id);
       setEditData({ id });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Add failed');
+      setError(e instanceof Error ? e.message : '\uCD94\uAC00 \uC2E4\uD328');
     }
   };
 
@@ -110,7 +111,7 @@ export function Database() {
       setEditData({});
       await loadItems();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed');
+      setError(e instanceof Error ? e.message : '\uC0AD\uC81C \uC2E4\uD328');
     }
   };
 
@@ -122,7 +123,7 @@ export function Database() {
       await loadCollections();
       setActiveCollection(id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Create failed');
+      setError(e instanceof Error ? e.message : '\uC0DD\uC131 \uC2E4\uD328');
     }
   };
 
@@ -136,7 +137,7 @@ export function Database() {
       setItems([]);
       await loadCollections();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed');
+      setError(e instanceof Error ? e.message : '\uC0AD\uC81C \uC2E4\uD328');
     }
   };
 
@@ -182,41 +183,41 @@ export function Database() {
       {/* Dialogs */}
       <PromptDialog
         open={addItemDialog}
-        title="Add Item"
-        label="Item ID"
-        placeholder="e.g. goblin_warrior"
+        title="아이템 추가"
+        label="아이템 ID"
+        placeholder="예: goblin_warrior"
         onSubmit={handleAddItem}
         onCancel={() => setAddItemDialog(false)}
       />
       <ConfirmDialog
         open={deleteItemDialog}
-        title="Delete Item"
-        message={`Delete "${activeItemId}" from ${activeCollection}?`}
-        confirmLabel="Delete"
+        title="아이템 삭제"
+        message={`${activeCollection}에서 "${activeItemId}"을(를) 삭제하시겠습니까?`}
+        confirmLabel="삭제"
         onConfirm={handleDeleteItem}
         onCancel={() => setDeleteItemDialog(false)}
       />
       <PromptDialog
         open={addCollectionDialog}
-        title="New Collection"
-        label="Collection name"
-        placeholder="e.g. monsters"
+        title="새 컬렉션"
+        label="컬렉션 이름"
+        placeholder="예: monsters"
         onSubmit={handleAddCollection}
         onCancel={() => setAddCollectionDialog(false)}
       />
       <ConfirmDialog
         open={deleteCollectionDialog}
-        title="Delete Collection"
-        message={`Delete collection "${activeCollection}" and all its items?`}
-        confirmLabel="Delete"
+        title="컬렉션 삭제"
+        message={`"${activeCollection}" 컬렉션과 모든 아이템을 삭제하시겠습니까?`}
+        confirmLabel="삭제"
         onConfirm={handleDeleteCollection}
         onCancel={() => setDeleteCollectionDialog(false)}
       />
       <PromptDialog
         open={addFieldDialog}
-        title="Add Field"
-        label="Field name"
-        placeholder="e.g. hp"
+        title="필드 추가"
+        label="필드 이름"
+        placeholder="예: hp"
         onSubmit={handleAddField}
         onCancel={() => setAddFieldDialog(false)}
       />
@@ -226,35 +227,37 @@ export function Database() {
         {/* Collection selector */}
         <div className="p-3 border-b border-gray-700">
           <div className="flex items-center gap-2 mb-2">
-            <select
-              className="flex-1 bg-gray-700 text-sm rounded px-2 py-1.5 border border-gray-600"
-              value={activeCollection || ''}
-              onChange={(e) => {
-                setActiveCollection(e.target.value || null);
-                setSearchQuery('');
-              }}
-            >
-              <option value="">-- Select --</option>
-              {collections.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <Tooltip text="게임 콘텐츠 종류를 선택합니다 (예: monsters, items)">
+              <select
+                className="flex-1 bg-gray-700 text-sm rounded px-2 py-1.5 border border-gray-600"
+                value={activeCollection || ''}
+                onChange={(e) => {
+                  setActiveCollection(e.target.value || null);
+                  setSearchQuery('');
+                }}
+              >
+                <option value="">-- 선택 --</option>
+                {collections.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Tooltip>
           </div>
           <div className="flex gap-1">
             <button
               onClick={() => setAddCollectionDialog(true)}
               className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded"
             >
-              + New
+              + 새로 만들기
             </button>
             {activeCollection && (
               <button
                 onClick={() => setDeleteCollectionDialog(true)}
                 className="text-xs px-2 py-1 bg-red-700 hover:bg-red-600 rounded"
               >
-                Delete
+                삭제
               </button>
             )}
           </div>
@@ -267,7 +270,7 @@ export function Database() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search items..."
+              placeholder="아이템 검색..."
               className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs"
             />
           </div>
@@ -293,7 +296,7 @@ export function Database() {
           ))}
           {activeCollection && filteredItems.length === 0 && (
             <div className="p-3 text-xs text-gray-500 text-center">
-              {searchQuery ? 'No matching items' : 'No items yet'}
+              {searchQuery ? '검색 결과 없음' : '아이템이 없습니다'}
             </div>
           )}
         </div>
@@ -305,7 +308,7 @@ export function Database() {
               onClick={() => setAddItemDialog(true)}
               className="w-full text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 rounded"
             >
-              + Add Item
+              + 아이템 추가
             </button>
           </div>
         )}
@@ -325,13 +328,13 @@ export function Database() {
                   disabled={saving}
                   className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded"
                 >
-                  {saving ? 'Saving...' : 'Save'}
+                  {saving ? '저장 중...' : '저장'}
                 </button>
                 <button
                   onClick={() => setDeleteItemDialog(true)}
                   className="px-4 py-1.5 text-sm bg-red-700 hover:bg-red-600 rounded"
                 >
-                  Delete
+                  삭제
                 </button>
               </div>
             </div>
@@ -391,7 +394,7 @@ export function Database() {
                     <button
                       onClick={() => removeField(key)}
                       className="text-gray-500 hover:text-red-400 text-sm pt-2"
-                      title="Remove field"
+                      title="필드 제거"
                     >
                       x
                     </button>
@@ -399,17 +402,19 @@ export function Database() {
                 </div>
               ))}
 
-              <button
-                onClick={() => setAddFieldDialog(true)}
-                className="text-sm text-blue-400 hover:text-blue-300"
-              >
-                + Add Field
-              </button>
+              <Tooltip text="이 아이템에 새로운 속성 필드를 추가합니다">
+                <button
+                  onClick={() => setAddFieldDialog(true)}
+                  className="text-sm text-blue-400 hover:text-blue-300"
+                >
+                  + 필드 추가
+                </button>
+              </Tooltip>
             </div>
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            <p>{activeCollection ? 'Select an item to edit' : 'Select a collection'}</p>
+            <p>{activeCollection ? '편집할 아이템을 선택하세요' : '컬렉션을 선택하세요'}</p>
           </div>
         )}
       </div>

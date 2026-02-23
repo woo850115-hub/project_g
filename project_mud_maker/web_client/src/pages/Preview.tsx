@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { serverApi } from '../api/client';
 import type { ServerStatus } from '../types/api';
+import { Tooltip } from '../components/Tooltip';
 
 export function Preview() {
   const [status, setStatus] = useState<ServerStatus>({ running: false });
@@ -61,8 +62,8 @@ export function Preview() {
     xtermRef.current = term;
     fitRef.current = fit;
 
-    term.writeln('\x1b[36m=== MUD Game Maker Preview ===\x1b[0m');
-    term.writeln('Start the server and connect to play.\r\n');
+    term.writeln('\x1b[36m=== MUD \uAC8C\uC784 \uBA54\uC774\uCEE4 \uBBF8\uB9AC\uBCF4\uAE30 ===\x1b[0m');
+    term.writeln('\uC11C\uBC84\uB97C \uC2DC\uC791\uD558\uACE0 \uC5F0\uACB0\uD558\uC5EC \uD50C\uB808\uC774\uD558\uC138\uC694.\r\n');
 
     // Handle resize
     const observer = new ResizeObserver(() => fit.fit());
@@ -130,12 +131,12 @@ export function Preview() {
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws/preview`);
     previewWsRef.current = ws;
 
-    term.writeln('\x1b[33mConnecting to MUD server...\x1b[0m');
+    term.writeln('\x1b[33mMUD \uC11C\uBC84\uC5D0 \uC5F0\uACB0 \uC911...\x1b[0m');
 
     let inputBuffer = '';
 
     ws.onopen = () => {
-      term.writeln('\x1b[32mConnected!\x1b[0m\r\n');
+      term.writeln('\x1b[32m\uC5F0\uACB0\uB428!\x1b[0m\r\n');
     };
 
     ws.onmessage = (e) => {
@@ -152,7 +153,7 @@ export function Preview() {
     };
 
     ws.onclose = () => {
-      term.writeln('\r\n\x1b[31mDisconnected from MUD server.\x1b[0m');
+      term.writeln('\r\n\x1b[31mMUD \uC11C\uBC84\uC640\uC758 \uC5F0\uACB0\uC774 \uB04A\uACBC\uC2B5\uB2C8\uB2E4.\x1b[0m');
       previewWsRef.current = null;
     };
 
@@ -196,7 +197,7 @@ export function Preview() {
       await new Promise((r) => setTimeout(r, 2000));
       await refreshStatus();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Start failed');
+      setError(e instanceof Error ? e.message : '\uC11C\uBC84 \uC2DC\uC791 \uC2E4\uD328');
     } finally {
       setStarting(false);
     }
@@ -209,7 +210,7 @@ export function Preview() {
       await serverApi.stop();
       await refreshStatus();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Stop failed');
+      setError(e instanceof Error ? e.message : '\uC11C\uBC84 \uC815\uC9C0 \uC2E4\uD328');
     } finally {
       setStopping(false);
     }
@@ -223,7 +224,7 @@ export function Preview() {
       await new Promise((r) => setTimeout(r, 2000));
       await refreshStatus();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Restart failed');
+      setError(e instanceof Error ? e.message : '\uC11C\uBC84 \uC7AC\uC2DC\uC791 \uC2E4\uD328');
     } finally {
       setStopping(false);
     }
@@ -248,45 +249,49 @@ export function Preview() {
             }`}
           />
           <span className="text-sm">
-            {status.running ? `Running (PID ${status.pid})` : 'Stopped'}
+            {status.running ? `\uC2E4\uD589 \uC911 (PID ${status.pid})` : '\uC815\uC9C0\uB428'}
           </span>
         </div>
         <div className="flex gap-2 ml-4">
           {!status.running ? (
-            <button
-              onClick={startServer}
-              disabled={starting}
-              className="px-3 py-1 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded"
-            >
-              {starting ? 'Starting...' : 'Start Server'}
-            </button>
+            <Tooltip text="MUD 서버를 시작하여 게임을 미리보기합니다">
+              <button
+                onClick={startServer}
+                disabled={starting}
+                className="px-3 py-1 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded"
+              >
+                {starting ? '\uC2DC\uC791 \uC911...' : '\uC11C\uBC84 \uC2DC\uC791'}
+              </button>
+            </Tooltip>
           ) : (
             <>
-              <button
-                onClick={connectTerminal}
-                className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded"
-              >
-                Connect
-              </button>
+              <Tooltip text="MUD 서버에 연결하여 게임 터미널을 엽니다">
+                <button
+                  onClick={connectTerminal}
+                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded"
+                >
+                  연결
+                </button>
+              </Tooltip>
               <button
                 onClick={disconnectTerminal}
                 className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded"
               >
-                Disconnect
+                연결 해제
               </button>
               <button
                 onClick={restartServer}
                 disabled={stopping}
                 className="px-3 py-1 text-xs bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 rounded"
               >
-                Restart
+                재시작
               </button>
               <button
                 onClick={stopServer}
                 disabled={stopping}
                 className="px-3 py-1 text-xs bg-red-700 hover:bg-red-600 disabled:opacity-50 rounded"
               >
-                {stopping ? 'Stopping...' : 'Stop'}
+                {stopping ? '\uC815\uC9C0 \uC911...' : '\uC815\uC9C0'}
               </button>
             </>
           )}
@@ -298,7 +303,7 @@ export function Preview() {
         {/* MUD Terminal */}
         <div className="flex-1 flex flex-col border-r border-gray-700">
           <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 bg-gray-800">
-            MUD Terminal
+            MUD 터미널
           </div>
           <div ref={termRef} className="flex-1" />
         </div>
@@ -306,17 +311,17 @@ export function Preview() {
         {/* Log viewer */}
         <div className="w-[400px] flex flex-col bg-gray-900">
           <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 bg-gray-800 flex items-center justify-between">
-            <span>Server Logs</span>
+            <span>서버 로그</span>
             <button
               onClick={() => setLogs([])}
               className="text-gray-500 hover:text-gray-300"
             >
-              Clear
+              지우기
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-2 font-mono text-xs">
             {logs.length === 0 ? (
-              <p className="text-gray-600">No logs yet. Start the server to see output.</p>
+              <p className="text-gray-600">로그가 없습니다. 서버를 시작하면 출력을 볼 수 있습니다.</p>
             ) : (
               logs.map((line, i) => (
                 <div

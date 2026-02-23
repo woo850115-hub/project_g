@@ -22,8 +22,8 @@ export function RoomNode({ data, selected }: { data: RoomNodeData; selected?: bo
       <div className="text-sm font-bold text-gray-100">{data.label}</div>
 
       <div className="flex items-center justify-center gap-3 mt-1 text-[10px] text-gray-400">
-        {data.exitCount > 0 && <span>{data.exitCount} exits</span>}
-        {data.entityCount > 0 && <span>{data.entityCount} entities</span>}
+        {data.exitCount > 0 && <span>{data.exitCount} 출구</span>}
+        {data.entityCount > 0 && <span>{data.entityCount} 엔티티</span>}
       </div>
 
       <Handle type="source" position={Position.Bottom} className="!bg-blue-500 !w-3 !h-3" />

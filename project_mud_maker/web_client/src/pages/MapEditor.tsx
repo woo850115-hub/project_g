@@ -20,6 +20,7 @@ import type { Room, WorldData } from '../types/world';
 import { RoomNode } from '../components/RoomNode';
 import { RoomPanel } from '../components/RoomPanel';
 import { AddRoomDialog, ConnectDialog, ConfirmDialog } from '../components/Modal';
+import { Tooltip } from '../components/Tooltip';
 
 const DIRECTIONS = ['north', 'south', 'east', 'west', 'up', 'down'] as const;
 const OPPOSITE: Record<string, string> = {
@@ -57,7 +58,7 @@ export function MapEditor() {
       const data = await worldApi.get();
       setWorld(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load world');
+      setError(e instanceof Error ? e.message : '\uC6D4\uB4DC \uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC62C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4');
     }
   }, []);
 
@@ -233,7 +234,7 @@ export function MapEditor() {
     try {
       await worldApi.save(world);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(e instanceof Error ? e.message : '\uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4');
     } finally {
       setSaving(false);
     }
@@ -246,7 +247,7 @@ export function MapEditor() {
       const result = await worldApi.generate();
       setLuaPreview(result.preview);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Generate failed');
+      setError(e instanceof Error ? e.message : 'Lua \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4');
     }
   };
 
@@ -279,9 +280,9 @@ export function MapEditor() {
       />
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Delete Room"
-        message={`Delete room "${deleteDialog.roomName}"? All exits to this room will also be removed.`}
-        confirmLabel="Delete"
+        title="방 삭제"
+        message={`"${deleteDialog.roomName}" 방을 삭제하시겠습니까? 이 방으로의 모든 출구도 함께 제거됩니다.`}
+        confirmLabel="삭제"
         onConfirm={handleDeleteRoom}
         onCancel={() => setDeleteDialog({ open: false, roomId: '', roomName: '' })}
       />
@@ -290,27 +291,33 @@ export function MapEditor() {
       <div className="flex-1 flex flex-col">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-700 bg-gray-800">
-          <button
-            onClick={() => setAddRoomOpen(true)}
-            className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded"
-          >
-            + Add Room
-          </button>
-          <button
-            onClick={saveWorld}
-            disabled={saving}
-            className="px-3 py-1 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-          <button
-            onClick={generateLua}
-            className="px-3 py-1 text-xs bg-purple-700 hover:bg-purple-600 rounded"
-          >
-            Generate Lua
-          </button>
+          <Tooltip text="맵에 새로운 방을 추가합니다">
+            <button
+              onClick={() => setAddRoomOpen(true)}
+              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded"
+            >
+              + 방 추가
+            </button>
+          </Tooltip>
+          <Tooltip text="현재 맵 데이터를 서버에 저장합니다">
+            <button
+              onClick={saveWorld}
+              disabled={saving}
+              className="px-3 py-1 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded"
+            >
+              {saving ? '저장 중...' : '저장'}
+            </button>
+          </Tooltip>
+          <Tooltip text="맵 데이터를 기반으로 Lua 스크립트를 자동 생성합니다">
+            <button
+              onClick={generateLua}
+              className="px-3 py-1 text-xs bg-purple-700 hover:bg-purple-600 rounded"
+            >
+              Lua 생성
+            </button>
+          </Tooltip>
           <span className="text-xs text-gray-500 ml-auto">
-            {world.rooms.length} rooms | Drag nodes to connect exits
+            {world.rooms.length}개 방 | 노드를 드래그하여 출구를 연결하세요
           </span>
         </div>
 
@@ -344,12 +351,12 @@ export function MapEditor() {
         {luaPreview && (
           <div className="border-t border-gray-700 bg-gray-900 max-h-64 overflow-y-auto">
             <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800 border-b border-gray-700">
-              <span className="text-xs text-gray-400">Generated Lua Preview</span>
+              <span className="text-xs text-gray-400">생성된 Lua 미리보기</span>
               <button
                 onClick={() => setLuaPreview(null)}
                 className="text-xs text-gray-500 hover:text-gray-300"
               >
-                Close
+                닫기
               </button>
             </div>
             <pre className="p-3 text-xs font-mono text-green-300 whitespace-pre-wrap">
@@ -371,7 +378,7 @@ export function MapEditor() {
           />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-            Select a room to edit
+            편집할 방을 선택하세요
           </div>
         )}
       </div>

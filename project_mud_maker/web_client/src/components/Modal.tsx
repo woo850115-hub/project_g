@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+const DIR_LABELS: Record<string, string> = {
+  north: '\uBD81\uCABD', south: '\uB0A8\uCABD',
+  east: '\uB3D9\uCABD', west: '\uC11C\uCABD',
+  up: '\uC704', down: '\uC544\uB798',
+};
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -62,7 +68,7 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = 'Confirm',
+  confirmLabel = '\uD655\uC778',
   confirmClass = 'bg-red-600 hover:bg-red-500',
   onConfirm,
   onCancel,
@@ -75,7 +81,7 @@ export function ConfirmDialog({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
         >
-          Cancel
+          취소
         </button>
         <button
           onClick={onConfirm}
@@ -140,13 +146,13 @@ export function PromptDialog({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
         >
-          Cancel
+          취소
         </button>
         <button
           onClick={handleSubmit}
           className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
         >
-          OK
+          확인
         </button>
       </div>
     </Modal>
@@ -212,13 +218,13 @@ export function SelectDialog({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
         >
-          Cancel
+          취소
         </button>
         <button
           onClick={handleSubmit}
           className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
         >
-          OK
+          확인
         </button>
       </div>
     </Modal>
@@ -253,18 +259,18 @@ export function AddExitDialog({
 
   if (availableDirections.length === 0 || targetRooms.length === 0) {
     return (
-      <Modal open={open} onClose={onCancel} title="Add Exit">
+      <Modal open={open} onClose={onCancel} title="출구 추가">
         <p className="text-sm text-gray-400 mb-4">
           {availableDirections.length === 0
-            ? 'No available directions.'
-            : 'No other rooms to connect to.'}
+            ? '사용 가능한 방향이 없습니다.'
+            : '연결할 다른 방이 없습니다.'}
         </p>
         <div className="flex justify-end">
           <button
             onClick={onCancel}
             className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
           >
-            Close
+            닫기
           </button>
         </div>
       </Modal>
@@ -272,10 +278,10 @@ export function AddExitDialog({
   }
 
   return (
-    <Modal open={open} onClose={onCancel} title="Add Exit">
+    <Modal open={open} onClose={onCancel} title="출구 추가">
       <div className="space-y-3 mb-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Direction</label>
+          <label className="block text-xs text-gray-400 mb-1">방향</label>
           <select
             ref={dirRef}
             defaultValue={availableDirections[0]}
@@ -283,13 +289,13 @@ export function AddExitDialog({
           >
             {availableDirections.map((d) => (
               <option key={d} value={d}>
-                {d}
+                {DIR_LABELS[d] || d}
               </option>
             ))}
           </select>
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Target Room</label>
+          <label className="block text-xs text-gray-400 mb-1">대상 방</label>
           <select
             ref={targetRef}
             defaultValue={targetRooms[0]?.id}
@@ -308,13 +314,13 @@ export function AddExitDialog({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
         >
-          Cancel
+          취소
         </button>
         <button
           onClick={handleSubmit}
           className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
         >
-          Add Exit
+          출구 추가
         </button>
       </div>
     </Modal>
@@ -342,7 +348,7 @@ export function AddEntityDialog({
 
   const entityTypes = [
     { value: 'npc', label: 'NPC', collection: 'monsters' },
-    { value: 'item', label: 'Item', collection: 'items' },
+    { value: 'item', label: '\uC544\uC774\uD15C', collection: 'items' },
   ];
 
   const collection = entityTypes.find((t) => t.value === selectedType)?.collection || 'monsters';
@@ -356,10 +362,10 @@ export function AddEntityDialog({
   };
 
   return (
-    <Modal open={open} onClose={onCancel} title="Add Entity">
+    <Modal open={open} onClose={onCancel} title="엔티티 추가">
       <div className="space-y-3 mb-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Entity Type</label>
+          <label className="block text-xs text-gray-400 mb-1">엔티티 유형</label>
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
@@ -373,7 +379,7 @@ export function AddEntityDialog({
           </select>
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Content</label>
+          <label className="block text-xs text-gray-400 mb-1">콘텐츠</label>
           {items.length > 0 ? (
             <select
               ref={contentSelectRef}
@@ -390,7 +396,7 @@ export function AddEntityDialog({
             <input
               ref={contentInputRef}
               type="text"
-              placeholder="Content ID"
+              placeholder="콘텐츠 ID"
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
             />
           )}
@@ -401,13 +407,13 @@ export function AddEntityDialog({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
         >
-          Cancel
+          취소
         </button>
         <button
           onClick={handleSubmit}
           className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
         >
-          Add Entity
+          엔티티 추가
         </button>
       </div>
     </Modal>
@@ -442,21 +448,21 @@ export function AddRoomDialog({
     const name = nameRef.current?.value.trim() || id;
     if (!id) return;
     if (existingIds.includes(id)) {
-      if (errorRef.current) errorRef.current.textContent = `Room ID "${id}" already exists`;
+      if (errorRef.current) errorRef.current.textContent = `방 ID "${id}"이(가) 이미 존재합니다`;
       return;
     }
     onSubmit(id, name!);
   };
 
   return (
-    <Modal open={open} onClose={onCancel} title="Add Room">
+    <Modal open={open} onClose={onCancel} title="방 추가">
       <div className="space-y-3 mb-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Room ID</label>
+          <label className="block text-xs text-gray-400 mb-1">방 ID</label>
           <input
             ref={idRef}
             type="text"
-            placeholder="e.g. tavern"
+            placeholder="예: tavern"
             onKeyDown={(e) => {
               if (e.key === 'Enter') nameRef.current?.focus();
             }}
@@ -464,11 +470,11 @@ export function AddRoomDialog({
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Room Name</label>
+          <label className="block text-xs text-gray-400 mb-1">방 이름</label>
           <input
             ref={nameRef}
             type="text"
-            placeholder="e.g. The Old Tavern"
+            placeholder="예: 오래된 선술집"
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSubmit();
             }}
@@ -482,13 +488,13 @@ export function AddRoomDialog({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
         >
-          Cancel
+          취소
         </button>
         <button
           onClick={handleSubmit}
           className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
         >
-          Add Room
+          방 추가
         </button>
       </div>
     </Modal>
@@ -524,15 +530,15 @@ export function ConnectDialog({
   };
 
   return (
-    <Modal open={open} onClose={onCancel} title="Connect Rooms">
+    <Modal open={open} onClose={onCancel} title="방 연결">
       <p className="text-xs text-gray-400 mb-3">
         <span className="text-blue-400">{sourceId}</span>
-        {' → '}
+        {' \u2192 '}
         <span className="text-green-400">{targetId}</span>
       </p>
       <div className="space-y-3 mb-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Direction</label>
+          <label className="block text-xs text-gray-400 mb-1">방향</label>
           <select
             ref={dirRef}
             defaultValue={directions[0]}
@@ -540,14 +546,14 @@ export function ConnectDialog({
           >
             {directions.map((d) => (
               <option key={d} value={d}>
-                {d}
+                {DIR_LABELS[d] || d}
               </option>
             ))}
           </select>
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-300">
           <input ref={bidirRef} type="checkbox" defaultChecked className="rounded" />
-          Bidirectional exit
+          양방향 출구
         </label>
       </div>
       <div className="flex justify-end gap-2">
@@ -555,13 +561,13 @@ export function ConnectDialog({
           onClick={onCancel}
           className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
         >
-          Cancel
+          취소
         </button>
         <button
           onClick={handleSubmit}
           className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
         >
-          Connect
+          연결
         </button>
       </div>
     </Modal>

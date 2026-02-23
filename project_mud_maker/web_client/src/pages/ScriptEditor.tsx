@@ -4,6 +4,7 @@ import type { editor } from 'monaco-editor';
 import { scriptsApi } from '../api/client';
 import type { ScriptFile } from '../types/api';
 import { PromptDialog, ConfirmDialog } from '../components/Modal';
+import { Tooltip } from '../components/Tooltip';
 
 // Lua API completions for the MUD engine
 const LUA_API_ITEMS = [
@@ -68,7 +69,7 @@ export function ScriptEditor() {
       const list = await scriptsApi.list();
       setFiles(list);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load scripts');
+      setError(e instanceof Error ? e.message : '\uC2A4\uD06C\uB9BD\uD2B8 \uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
     }
   }, []);
 
@@ -91,7 +92,7 @@ export function ScriptEditor() {
       setContent(data.content);
       setDirty(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to open file');
+      setError(e instanceof Error ? e.message : '\uD30C\uC77C \uC5F4\uAE30 \uC2E4\uD328');
     }
   };
 
@@ -108,7 +109,7 @@ export function ScriptEditor() {
       await scriptsApi.update(activeFile, content);
       setDirty(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(e instanceof Error ? e.message : '\uC800\uC7A5 \uC2E4\uD328');
     } finally {
       setSaving(false);
     }
@@ -117,7 +118,7 @@ export function ScriptEditor() {
   const handleCreateFile = async (filename: string) => {
     setCreateDialog(false);
     if (!filename.endsWith('.lua')) {
-      setError('Filename must end with .lua');
+      setError('\uD30C\uC77C\uBA85\uC740 .lua\uB85C \uB05D\uB098\uC57C \uD569\uB2C8\uB2E4');
       return;
     }
     try {
@@ -126,7 +127,7 @@ export function ScriptEditor() {
       setDirty(false);
       await doOpenFile(filename);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Create failed');
+      setError(e instanceof Error ? e.message : '\uC0DD\uC131 \uC2E4\uD328');
     }
   };
 
@@ -140,7 +141,7 @@ export function ScriptEditor() {
       setDirty(false);
       await loadFiles();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed');
+      setError(e instanceof Error ? e.message : '\uC0AD\uC81C \uC2E4\uD328');
     }
   };
 
@@ -200,25 +201,25 @@ export function ScriptEditor() {
       {/* Dialogs */}
       <PromptDialog
         open={createDialog}
-        title="New Script"
-        label="Filename (e.g. 05_quests.lua)"
+        title="새 스크립트"
+        label="파일명 (예: 05_quests.lua)"
         placeholder="05_quests.lua"
         onSubmit={handleCreateFile}
         onCancel={() => setCreateDialog(false)}
       />
       <ConfirmDialog
         open={deleteDialog}
-        title="Delete Script"
-        message={`Delete "${activeFile}"?`}
-        confirmLabel="Delete"
+        title="스크립트 삭제"
+        message={`"${activeFile}"을(를) 삭제하시겠습니까?`}
+        confirmLabel="삭제"
         onConfirm={handleDeleteFile}
         onCancel={() => setDeleteDialog(false)}
       />
       <ConfirmDialog
         open={discardDialog.open}
-        title="Unsaved Changes"
-        message="Unsaved changes will be lost. Continue?"
-        confirmLabel="Discard"
+        title="저장되지 않은 변경"
+        message="저장되지 않은 변경 사항이 사라집니다. 계속하시겠습니까?"
+        confirmLabel="변경 취소"
         confirmClass="bg-yellow-600 hover:bg-yellow-500"
         onConfirm={handleDiscardConfirm}
         onCancel={() => setDiscardDialog({ open: false, pendingFile: '' })}
@@ -227,13 +228,15 @@ export function ScriptEditor() {
       {/* File list sidebar */}
       <div className="w-56 border-r border-gray-700 bg-gray-800 flex flex-col">
         <div className="p-3 border-b border-gray-700 flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-300">Scripts</span>
-          <button
-            onClick={() => setCreateDialog(true)}
-            className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded"
-          >
-            + New
-          </button>
+          <span className="text-sm font-medium text-gray-300">스크립트</span>
+          <Tooltip text="새로운 Lua 스크립트 파일을 생성합니다">
+            <button
+              onClick={() => setCreateDialog(true)}
+              className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded"
+            >
+              + 새로 만들기
+            </button>
+          </Tooltip>
         </div>
         <div className="flex-1 overflow-y-auto">
           {files.map((f) => (
@@ -271,13 +274,13 @@ export function ScriptEditor() {
                 disabled={saving || !dirty}
                 className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-40 rounded"
               >
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? '저장 중...' : '저장'}
               </button>
               <button
                 onClick={() => setDeleteDialog(true)}
                 className="px-3 py-1 text-xs bg-red-700 hover:bg-red-600 rounded"
               >
-                Delete
+                삭제
               </button>
             </div>
 
@@ -306,7 +309,7 @@ export function ScriptEditor() {
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            <p>Select a script to edit</p>
+            <p>편집할 스크립트를 선택하세요</p>
           </div>
         )}
       </div>

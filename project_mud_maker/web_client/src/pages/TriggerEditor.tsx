@@ -4,22 +4,23 @@ import type { Trigger, TriggerCondition, TriggerAction } from '../types/trigger'
 import type { Room } from '../types/world';
 import type { ContentItem } from '../types/content';
 import { PromptDialog, ConfirmDialog } from '../components/Modal';
+import { Tooltip } from '../components/Tooltip';
 
 const CONDITION_TYPES = [
-  { value: 'enter_room', label: 'Room Entry' },
-  { value: 'command', label: 'Player Command' },
-  { value: 'tick_interval', label: 'Timer (Tick Interval)' },
-  { value: 'entity_death', label: 'Entity Death' },
-  { value: 'on_connect', label: 'Player Connect' },
+  { value: 'enter_room', label: '\uBC29 \uC785\uC7A5', desc: '\uD50C\uB808\uC774\uC5B4\uAC00 \uD2B9\uC815 \uBC29\uC5D0 \uB4E4\uC5B4\uC62C \uB54C \uBC1C\uB3D9' },
+  { value: 'command', label: '\uD50C\uB808\uC774\uC5B4 \uBA85\uB839', desc: '\uD50C\uB808\uC774\uC5B4\uAC00 \uD2B9\uC815 \uBA85\uB839\uC5B4\uB97C \uC785\uB825\uD560 \uB54C \uBC1C\uB3D9' },
+  { value: 'tick_interval', label: '\uD0C0\uC774\uBA38', desc: '\uC77C\uC815 \uD2F1 \uAC04\uACA9\uC73C\uB85C \uBC18\uBCF5 \uBC1C\uB3D9 (20\uD2F1 = 1\uCD08)' },
+  { value: 'entity_death', label: '\uC5D4\uD2F0\uD2F0 \uC0AC\uB9DD', desc: '\uC5D4\uD2F0\uD2F0\uAC00 \uC8FD\uC5C8\uC744 \uB54C \uBC1C\uB3D9' },
+  { value: 'on_connect', label: '\uD50C\uB808\uC774\uC5B4 \uC811\uC18D', desc: '\uD50C\uB808\uC774\uC5B4\uAC00 \uC11C\uBC84\uC5D0 \uC811\uC18D\uD560 \uB54C \uBC1C\uB3D9' },
 ] as const;
 
 const ACTION_TYPES = [
-  { value: 'send_message', label: 'Send Message' },
-  { value: 'spawn_entity', label: 'Spawn Entity' },
-  { value: 'teleport', label: 'Teleport Player' },
-  { value: 'give_item', label: 'Give Item' },
-  { value: 'set_component', label: 'Set Component' },
-  { value: 'despawn_trigger_entity', label: 'Despawn Entity' },
+  { value: 'send_message', label: '\uBA54\uC2DC\uC9C0 \uC804\uC1A1', desc: '\uD50C\uB808\uC774\uC5B4\uB098 \uBC29 \uC804\uCCB4\uC5D0 \uD14D\uC2A4\uD2B8 \uBA54\uC2DC\uC9C0\uB97C \uBCF4\uB0C5\uB2C8\uB2E4' },
+  { value: 'spawn_entity', label: '\uC5D4\uD2F0\uD2F0 \uC0DD\uC131', desc: '\uC9C0\uC815\uD55C \uBC29\uC5D0 NPC\uB098 \uC544\uC774\uD15C\uC744 \uC0DD\uC131\uD569\uB2C8\uB2E4' },
+  { value: 'teleport', label: '\uD50C\uB808\uC774\uC5B4 \uC774\uB3D9', desc: '\uD50C\uB808\uC774\uC5B4\uB97C \uC9C0\uC815\uD55C \uBC29\uC73C\uB85C \uC774\uB3D9\uC2DC\uD0B5\uB2C8\uB2E4' },
+  { value: 'give_item', label: '\uC544\uC774\uD15C \uC9C0\uAE09', desc: '\uD50C\uB808\uC774\uC5B4\uC5D0\uAC8C \uC544\uC774\uD15C\uC744 \uC9C0\uAE09\uD569\uB2C8\uB2E4' },
+  { value: 'set_component', label: '\uCEF4\uD3EC\uB10C\uD2B8 \uC124\uC815', desc: '\uC5D4\uD2F0\uD2F0\uC758 ECS \uCEF4\uD3EC\uB10C\uD2B8 \uAC12\uC744 \uC124\uC815\uD569\uB2C8\uB2E4' },
+  { value: 'despawn_trigger_entity', label: '\uC5D4\uD2F0\uD2F0 \uC81C\uAC70', desc: '\uD2B8\uB9AC\uAC70\uB97C \uBC1C\uB3D9\uC2DC\uD0A8 \uC5D4\uD2F0\uD2F0\uB97C \uC81C\uAC70\uD569\uB2C8\uB2E4' },
 ] as const;
 
 function makeDefaultCondition(type: string): TriggerCondition {
@@ -63,7 +64,7 @@ export function TriggerEditor() {
       const data = await triggerApi.list();
       setTriggers(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load triggers');
+      setError(e instanceof Error ? e.message : '\uD2B8\uB9AC\uAC70 \uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
     }
   }, []);
 
@@ -104,7 +105,7 @@ export function TriggerEditor() {
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/^_|_$/g, '');
     if (triggers.some((t) => t.id === id)) {
-      setError(`Trigger ID "${id}" already exists`);
+      setError(`트리거 ID "${id}"이(가) 이미 존재합니다`);
       return;
     }
     const newTrigger: Trigger = {
@@ -130,7 +131,7 @@ export function TriggerEditor() {
     try {
       await triggerApi.save(triggers);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(e instanceof Error ? e.message : '\uC800\uC7A5 \uC2E4\uD328');
     } finally {
       setSaving(false);
     }
@@ -142,7 +143,7 @@ export function TriggerEditor() {
       const result = await triggerApi.generate();
       setLuaPreview(result.preview);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Generate failed');
+      setError(e instanceof Error ? e.message : 'Lua \uC0DD\uC131 \uC2E4\uD328');
     }
   };
 
@@ -159,17 +160,17 @@ export function TriggerEditor() {
       {/* Dialogs */}
       <PromptDialog
         open={createDialog}
-        title="New Trigger"
-        label="Trigger name"
-        placeholder="e.g. Dungeon Warning"
+        title="새 트리거"
+        label="트리거 이름"
+        placeholder="예: 던전 경고"
         onSubmit={handleCreate}
         onCancel={() => setCreateDialog(false)}
       />
       <ConfirmDialog
         open={deleteDialog}
-        title="Delete Trigger"
-        message={`Delete trigger "${selected?.name}"?`}
-        confirmLabel="Delete"
+        title="트리거 삭제"
+        message={`"${selected?.name}" 트리거를 삭제하시겠습니까?`}
+        confirmLabel="삭제"
         onConfirm={handleDelete}
         onCancel={() => setDeleteDialog(false)}
       />
@@ -178,12 +179,12 @@ export function TriggerEditor() {
       <div className="w-64 border-r border-gray-700 bg-gray-800 flex flex-col">
         <div className="p-3 border-b border-gray-700">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">Triggers</span>
+            <span className="text-sm font-medium text-gray-300">트리거</span>
             <button
               onClick={() => setCreateDialog(true)}
               className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded"
             >
-              + New
+              + 새로 만들기
             </button>
           </div>
           <div className="flex gap-1">
@@ -192,13 +193,13 @@ export function TriggerEditor() {
               disabled={saving}
               className="flex-1 text-xs px-2 py-1 bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded"
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? '저장 중...' : '저장'}
             </button>
             <button
               onClick={generateLua}
               className="flex-1 text-xs px-2 py-1 bg-purple-700 hover:bg-purple-600 rounded"
             >
-              Generate
+              Lua 생성
             </button>
           </div>
         </div>
@@ -225,7 +226,7 @@ export function TriggerEditor() {
           ))}
           {triggers.length === 0 && (
             <div className="p-3 text-xs text-gray-500 text-center">
-              No triggers yet
+              트리거가 없습니다
             </div>
           )}
         </div>
@@ -246,12 +247,12 @@ export function TriggerEditor() {
         ) : luaPreview ? (
           <div className="flex-1 overflow-y-auto">
             <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
-              <span className="text-sm text-gray-400">Generated Lua Preview</span>
+              <span className="text-sm text-gray-400">생성된 Lua 미리보기</span>
               <button
                 onClick={() => setLuaPreview(null)}
                 className="text-xs text-gray-500 hover:text-gray-300"
               >
-                Close
+                닫기
               </button>
             </div>
             <pre className="p-4 text-xs font-mono text-green-300 whitespace-pre-wrap">
@@ -260,7 +261,7 @@ export function TriggerEditor() {
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-            Select a trigger to edit, or create a new one
+            편집할 트리거를 선택하거나 새로 만드세요
           </div>
         )}
       </div>
@@ -314,20 +315,20 @@ function TriggerForm({ trigger, rooms, contentItems, onChange, onDelete }: Trigg
               onChange={(e) => update({ enabled: e.target.checked })}
               className="rounded"
             />
-            Enabled
+            활성화
           </label>
         </div>
         <button
           onClick={onDelete}
           className="px-3 py-1 text-xs bg-red-700 hover:bg-red-600 rounded"
         >
-          Delete
+          삭제
         </button>
       </div>
 
       {/* Name */}
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Name</label>
+        <label className="block text-xs text-gray-400 mb-1">이름</label>
         <input
           type="text"
           value={trigger.name}
@@ -339,16 +340,20 @@ function TriggerForm({ trigger, rooms, contentItems, onChange, onDelete }: Trigg
       {/* WHEN — Condition */}
       <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded">WHEN</span>
-          <select
-            value={trigger.condition.type}
-            onChange={(e) => updateCondition(makeDefaultCondition(e.target.value))}
-            className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-          >
-            {CONDITION_TYPES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
+          <Tooltip text="트리거가 발동되는 조건을 설정합니다">
+            <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded">조건</span>
+          </Tooltip>
+          <Tooltip text={CONDITION_TYPES.find((c) => c.value === trigger.condition.type)?.desc || ''}>
+            <select
+              value={trigger.condition.type}
+              onChange={(e) => updateCondition(makeDefaultCondition(e.target.value))}
+              className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+            >
+              {CONDITION_TYPES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </Tooltip>
         </div>
 
         <ConditionFields
@@ -362,12 +367,14 @@ function TriggerForm({ trigger, rooms, contentItems, onChange, onDelete }: Trigg
       {/* THEN — Actions */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-green-400 bg-green-400/10 px-2 py-0.5 rounded">THEN</span>
+          <Tooltip text="조건이 충족되면 순서대로 실행되는 동작입니다">
+            <span className="text-xs font-bold text-green-400 bg-green-400/10 px-2 py-0.5 rounded">실행</span>
+          </Tooltip>
           <button
             onClick={addAction}
             className="text-xs text-blue-400 hover:text-blue-300"
           >
-            + Add Action
+            + 액션 추가
           </button>
         </div>
 
@@ -375,23 +382,25 @@ function TriggerForm({ trigger, rooms, contentItems, onChange, onDelete }: Trigg
           <div key={i} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Action {i + 1}</span>
-                <select
-                  value={action.type}
-                  onChange={(e) => updateAction(i, makeDefaultAction(e.target.value))}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                >
-                  {ACTION_TYPES.map((a) => (
-                    <option key={a.value} value={a.value}>{a.label}</option>
-                  ))}
-                </select>
+                <span className="text-xs text-gray-500">액션 {i + 1}</span>
+                <Tooltip text={ACTION_TYPES.find((a) => a.value === action.type)?.desc || ''}>
+                  <select
+                    value={action.type}
+                    onChange={(e) => updateAction(i, makeDefaultAction(e.target.value))}
+                    className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                  >
+                    {ACTION_TYPES.map((a) => (
+                      <option key={a.value} value={a.value}>{a.label}</option>
+                    ))}
+                  </select>
+                </Tooltip>
               </div>
               {trigger.actions.length > 1 && (
                 <button
                   onClick={() => removeAction(i)}
                   className="text-gray-500 hover:text-red-400 text-xs"
                 >
-                  Remove
+                  제거
                 </button>
               )}
             </div>
@@ -423,13 +432,13 @@ function ConditionFields({ condition, rooms, contentItems, onChange }: Condition
     case 'enter_room':
       return (
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Room</label>
+          <label className="block text-xs text-gray-400 mb-1">방</label>
           <select
             value={condition.room_id}
             onChange={(e) => onChange({ ...condition, room_id: e.target.value })}
             className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
           >
-            <option value="">-- Select room --</option>
+            <option value="">-- 방 선택 --</option>
             {rooms.map((r) => (
               <option key={r.id} value={r.name || r.id}>{r.name || r.id}</option>
             ))}
@@ -440,12 +449,12 @@ function ConditionFields({ condition, rooms, contentItems, onChange }: Condition
     case 'command':
       return (
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Command</label>
+          <label className="block text-xs text-gray-400 mb-1">명령어</label>
           <input
             type="text"
             value={condition.command}
             onChange={(e) => onChange({ ...condition, command: e.target.value })}
-            placeholder="e.g. pray, search, talk"
+            placeholder="예: pray, search, talk"
             className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
           />
         </div>
@@ -455,7 +464,7 @@ function ConditionFields({ condition, rooms, contentItems, onChange }: Condition
       return (
         <div>
           <label className="block text-xs text-gray-400 mb-1">
-            Interval (ticks) — 20 ticks = 1 second
+            간격 (틱) — 20틱 = 1초
           </label>
           <input
             type="number"
@@ -470,13 +479,13 @@ function ConditionFields({ condition, rooms, contentItems, onChange }: Condition
     case 'entity_death':
       return (
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Entity (content ID, leave empty for any)</label>
+          <label className="block text-xs text-gray-400 mb-1">엔티티 (콘텐츠 ID, 비워두면 모두 해당)</label>
           <select
             value={condition.content_id}
             onChange={(e) => onChange({ ...condition, content_id: e.target.value })}
             className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
           >
-            <option value="">Any entity</option>
+            <option value="">모든 엔티티</option>
             {(contentItems['monsters'] || []).map((m) => (
               <option key={m.id} value={String(m.name || m.id)}>
                 {String(m.name || m.id)}
@@ -489,7 +498,7 @@ function ConditionFields({ condition, rooms, contentItems, onChange }: Condition
     case 'on_connect':
       return (
         <p className="text-xs text-gray-500">
-          Fires when a player connects to the server.
+          플레이어가 서버에 접속할 때 발동됩니다.
         </p>
       );
   }
@@ -510,23 +519,23 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
       return (
         <div className="space-y-2">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Target</label>
+            <label className="block text-xs text-gray-400 mb-1">대상</label>
             <select
               value={action.target}
               onChange={(e) => onChange({ ...action, target: e.target.value })}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
             >
-              <option value="player">Player only</option>
-              <option value="room">Entire room</option>
+              <option value="player">플레이어만</option>
+              <option value="room">방 전체</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Message</label>
+            <label className="block text-xs text-gray-400 mb-1">메시지</label>
             <textarea
               value={action.text}
               onChange={(e) => onChange({ ...action, text: e.target.value })}
               rows={2}
-              placeholder="Message text..."
+              placeholder="메시지 내용..."
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
             />
           </div>
@@ -538,18 +547,18 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Type</label>
+              <label className="block text-xs text-gray-400 mb-1">유형</label>
               <select
                 value={action.entity_type}
                 onChange={(e) => onChange({ ...action, entity_type: e.target.value })}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
               >
                 <option value="npc">NPC</option>
-                <option value="item">Item</option>
+                <option value="item">아이템</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Content</label>
+              <label className="block text-xs text-gray-400 mb-1">콘텐츠</label>
               <ContentSelect
                 collection={action.entity_type === 'npc' ? 'monsters' : 'items'}
                 value={action.content_id}
@@ -559,7 +568,7 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Room</label>
+            <label className="block text-xs text-gray-400 mb-1">방</label>
             <RoomSelect rooms={rooms} value={action.room_id} onChange={(v) => onChange({ ...action, room_id: v })} />
           </div>
         </div>
@@ -568,7 +577,7 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
     case 'teleport':
       return (
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Destination Room</label>
+          <label className="block text-xs text-gray-400 mb-1">목적지 방</label>
           <RoomSelect rooms={rooms} value={action.room_id} onChange={(v) => onChange({ ...action, room_id: v })} />
         </div>
       );
@@ -576,7 +585,7 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
     case 'give_item':
       return (
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Item</label>
+          <label className="block text-xs text-gray-400 mb-1">아이템</label>
           <ContentSelect
             collection="items"
             value={action.content_id}
@@ -590,17 +599,17 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
       return (
         <div className="space-y-2">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Component</label>
+            <label className="block text-xs text-gray-400 mb-1">컴포넌트</label>
             <input
               type="text"
               value={action.component}
               onChange={(e) => onChange({ ...action, component: e.target.value })}
-              placeholder="e.g. Health, Attack"
+              placeholder="예: Health, Attack"
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Value</label>
+            <label className="block text-xs text-gray-400 mb-1">값</label>
             <input
               type="text"
               value={String(action.value ?? '')}
@@ -609,7 +618,7 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
                 const num = Number(v);
                 onChange({ ...action, value: !isNaN(num) && v !== '' ? num : v });
               }}
-              placeholder="Value"
+              placeholder="값"
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
             />
           </div>
@@ -619,7 +628,7 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
     case 'despawn_trigger_entity':
       return (
         <p className="text-xs text-gray-500">
-          Removes the triggering entity from the world.
+          트리거를 발동시킨 엔티티를 월드에서 제거합니다.
         </p>
       );
   }
@@ -642,7 +651,7 @@ function RoomSelect({
       onChange={(e) => onChange(e.target.value)}
       className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
     >
-      <option value="">-- Select room --</option>
+      <option value="">-- 방 선택 --</option>
       {rooms.map((r) => (
         <option key={r.id} value={r.name || r.id}>
           {r.name || r.id}
@@ -670,7 +679,7 @@ function ContentSelect({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Content ID"
+        placeholder="콘텐츠 ID"
         className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
       />
     );
@@ -681,7 +690,7 @@ function ContentSelect({
       onChange={(e) => onChange(e.target.value)}
       className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
     >
-      <option value="">-- Select --</option>
+      <option value="">-- 선택 --</option>
       {items.map((item) => (
         <option key={item.id} value={String(item.name || item.id)}>
           {String(item.name || item.id)}
