@@ -68,6 +68,40 @@ export const scriptsApi = {
     request<ApiOk>(`/scripts/${filename}`, { method: 'DELETE' }),
 };
 
+// --- World API ---
+
+import type { WorldData, Room, PlacedEntity, GenerateResult } from '../types/world';
+
+export const worldApi = {
+  get: () => request<WorldData>('/world'),
+
+  save: (world: WorldData) =>
+    request<ApiOk>('/world', {
+      method: 'PUT',
+      body: JSON.stringify(world),
+    }),
+
+  getRoom: (id: string) => request<Room>(`/world/rooms/${id}`),
+
+  updateRoom: (id: string, room: Room) =>
+    request<ApiOk>(`/world/rooms/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(room),
+    }),
+
+  deleteRoom: (id: string) =>
+    request<ApiOk>(`/world/rooms/${id}`, { method: 'DELETE' }),
+
+  updateRoomEntities: (roomId: string, entities: PlacedEntity[]) =>
+    request<ApiOk>(`/world/rooms/${roomId}/entities`, {
+      method: 'PUT',
+      body: JSON.stringify(entities),
+    }),
+
+  generate: () =>
+    request<GenerateResult>('/world/generate', { method: 'POST' }),
+};
+
 // --- Server API ---
 
 export const serverApi = {
