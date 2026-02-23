@@ -102,6 +102,34 @@ export const worldApi = {
     request<GenerateResult>('/world/generate', { method: 'POST' }),
 };
 
+// --- Trigger API ---
+
+import type { Trigger } from '../types/trigger';
+
+export const triggerApi = {
+  list: () => request<Trigger[]>('/triggers'),
+
+  save: (triggers: Trigger[]) =>
+    request<ApiOk>('/triggers', {
+      method: 'PUT',
+      body: JSON.stringify(triggers),
+    }),
+
+  get: (id: string) => request<Trigger>(`/triggers/${id}`),
+
+  update: (id: string, trigger: Trigger) =>
+    request<ApiOk>(`/triggers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(trigger),
+    }),
+
+  delete: (id: string) =>
+    request<ApiOk>(`/triggers/${id}`, { method: 'DELETE' }),
+
+  generate: () =>
+    request<GenerateResult>('/triggers/generate', { method: 'POST' }),
+};
+
 // --- Server API ---
 
 export const serverApi = {

@@ -1,3 +1,4 @@
+pub mod triggers;
 pub mod world;
 pub mod ws;
 
@@ -10,6 +11,7 @@ pub fn router() -> Router<AppState> {
         .nest("/api/scripts", maker_common::scripts::router())
         .nest("/api/server", maker_common::process::router())
         .nest("/api/world", world::router())
+        .nest("/api/triggers", triggers::router())
         .route("/ws/logs", get(ws::ws_logs))
         .route("/ws/preview", get(ws::ws_preview))
 }

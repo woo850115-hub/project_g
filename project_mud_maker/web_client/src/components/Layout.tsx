@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 
-export type TabId = 'map' | 'database' | 'scripts' | 'preview';
+export type TabId = 'map' | 'database' | 'triggers' | 'scripts' | 'preview';
 
 interface LayoutProps {
   activeTab: TabId;
@@ -11,6 +11,7 @@ interface LayoutProps {
 const tabs: { id: TabId; label: string }[] = [
   { id: 'map', label: 'Map' },
   { id: 'database', label: 'Database' },
+  { id: 'triggers', label: 'Triggers' },
   { id: 'scripts', label: 'Scripts' },
   { id: 'preview', label: 'Preview' },
 ];
