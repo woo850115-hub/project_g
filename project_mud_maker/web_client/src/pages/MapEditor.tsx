@@ -20,6 +20,7 @@ import { RoomNode } from '../components/RoomNode';
 import { RoomPanel } from '../components/RoomPanel';
 import { AddRoomDialog, AddConnectedRoomDialog, ConnectDialog, ConfirmDialog } from '../components/Modal';
 import { Tooltip } from '../components/Tooltip';
+import { useHistory } from '../hooks/useHistory';
 
 const DIRECTIONS = ['north', 'south', 'east', 'west', 'up', 'down'] as const;
 const OPPOSITE: Record<string, string> = {
@@ -60,7 +61,10 @@ export function MapEditor() {
 }
 
 function MapEditorInner() {
-  const [world, setWorld] = useState<WorldData>({ rooms: [] });
+  const worldHistory = useHistory<WorldData>({ rooms: [] });
+  const world = worldHistory.state;
+  const setWorld = worldHistory.set;
+  const replaceWorld = worldHistory.replace;
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -105,15 +109,15 @@ function MapEditorInner() {
     return map;
   }, [zones]);
 
-  // Load world data
+  // Load world data (use replace to not push server load into undo history)
   const loadWorld = useCallback(async () => {
     try {
       const data = await worldApi.get();
-      setWorld(data);
+      replaceWorld(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : '월드 데이터를 불러올 수 없습니다');
     }
-  }, []);
+  }, [replaceWorld]);
 
   useEffect(() => {
     loadWorld();
@@ -200,16 +204,14 @@ function MapEditorInner() {
           hasDimensionChange = true;
         }
         if (change.type === 'position' && change.position) {
-          setWorld((prev) => {
-            const updated = { ...prev, rooms: [...prev.rooms] };
-            const idx = updated.rooms.findIndex((r) => r.id === change.id);
-            if (idx >= 0) {
-              updated.rooms[idx] = {
-                ...updated.rooms[idx],
-                position: { x: change.position!.x, y: change.position!.y },
-              };
-            }
-            return updated;
+          // Use replace for drag — continuous edits shouldn't each push history
+          replaceWorld({
+            ...world,
+            rooms: world.rooms.map((r) =>
+              r.id === change.id
+                ? { ...r, position: { x: change.position!.x, y: change.position!.y } }
+                : r
+            ),
           });
         }
         if (change.type === 'select' && change.selected) {
@@ -232,7 +234,7 @@ function MapEditorInner() {
         });
       }
     },
-    [],
+    [world, replaceWorld],
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
@@ -257,28 +259,22 @@ function MapEditorInner() {
 
   const handleConnect = (direction: string, bidirectional: boolean) => {
     const { source, target } = connectDialog;
-    setWorld((prev) => {
-      const updated = { ...prev, rooms: prev.rooms.map((r) => ({ ...r })) };
-      const src = updated.rooms.find((r) => r.id === source);
-      const tgt = updated.rooms.find((r) => r.id === target);
-      if (src) {
-        src.exits = { ...src.exits, [direction]: target };
-      }
-      if (bidirectional && tgt && OPPOSITE[direction]) {
-        tgt.exits = { ...tgt.exits, [OPPOSITE[direction]]: source };
-      }
-      return updated;
+    const rooms = world.rooms.map((r) => {
+      if (r.id === source) return { ...r, exits: { ...r.exits, [direction]: target } };
+      if (bidirectional && r.id === target && OPPOSITE[direction]) return { ...r, exits: { ...r.exits, [OPPOSITE[direction]]: source } };
+      return r;
     });
+    setWorld({ ...world, rooms });
     setConnectDialog({ open: false, source: '', target: '' });
   };
 
   // Add new room — dialog callback
   const handleAddRoom = (id: string, name: string, zoneId?: string) => {
     const pos = { x: Math.random() * 400, y: Math.random() * 400 };
-    setWorld((prev) => ({
-      ...prev,
+    setWorld({
+      ...world,
       rooms: [
-        ...prev.rooms,
+        ...world.rooms,
         {
           id,
           name,
@@ -289,7 +285,7 @@ function MapEditorInner() {
           zone_id: zoneId || filterZoneId || undefined,
         },
       ],
-    }));
+    });
     setSelectedRoomId(id);
     setAddRoomOpen(false);
   };
@@ -316,25 +312,20 @@ function MapEditorInner() {
       y: parentRoom.position.y + offset.y,
     };
 
-    setWorld((prev) => {
-      const rooms = prev.rooms.map((r) => {
-        if (r.id === parentRoomId) {
-          return { ...r, exits: { ...r.exits, [direction]: id } };
-        }
-        return r;
-      });
-      const reverseDir = OPPOSITE[direction];
-      const newRoom: Room = {
-        id,
-        name,
-        description: '',
-        position: newPos,
-        exits: reverseDir ? { [reverseDir]: parentRoomId } : {},
-        entities: [],
-        zone_id: parentRoom.zone_id,
-      };
-      return { ...prev, rooms: [...rooms, newRoom] };
-    });
+    const rooms = world.rooms.map((r) =>
+      r.id === parentRoomId ? { ...r, exits: { ...r.exits, [direction]: id } } : r
+    );
+    const reverseDir = OPPOSITE[direction];
+    const newRoom: Room = {
+      id,
+      name,
+      description: '',
+      position: newPos,
+      exits: reverseDir ? { [reverseDir]: parentRoomId } : {},
+      entities: [],
+      zone_id: parentRoom.zone_id,
+    };
+    setWorld({ ...world, rooms: [...rooms, newRoom] });
 
     setSelectedRoomId(id);
     setConnectedRoomDialog({ open: false, direction: '', parentRoomId: '', parentRoomName: '' });
@@ -348,27 +339,25 @@ function MapEditorInner() {
 
   const handleDeleteRoom = () => {
     const { roomId } = deleteDialog;
-    setWorld((prev) => {
-      const rooms = prev.rooms
-        .filter((r) => r.id !== roomId)
-        .map((r) => ({
-          ...r,
-          exits: Object.fromEntries(
-            Object.entries(r.exits).filter(([, target]) => target !== roomId),
-          ),
-        }));
-      return { ...prev, rooms };
-    });
+    const rooms = world.rooms
+      .filter((r) => r.id !== roomId)
+      .map((r) => ({
+        ...r,
+        exits: Object.fromEntries(
+          Object.entries(r.exits).filter(([, target]) => target !== roomId),
+        ),
+      }));
+    setWorld({ ...world, rooms });
     if (selectedRoomId === roomId) setSelectedRoomId(null);
     setDeleteDialog({ open: false, roomId: '', roomName: '' });
   };
 
   // Update selected room
   const updateRoom = (updated: Room) => {
-    setWorld((prev) => ({
-      ...prev,
-      rooms: prev.rooms.map((r) => (r.id === updated.id ? updated : r)),
-    }));
+    setWorld({
+      ...world,
+      rooms: world.rooms.map((r) => (r.id === updated.id ? updated : r)),
+    });
   };
 
   // Zone management
@@ -379,33 +368,33 @@ function MapEditorInner() {
       setError('이미 같은 ID의 존이 있습니다');
       return;
     }
-    setWorld((prev) => ({
-      ...prev,
-      zones: [...(prev.zones || []), { id, name: newZoneName.trim(), color: newZoneColor }],
-    }));
+    setWorld({
+      ...world,
+      zones: [...(world.zones || []), { id, name: newZoneName.trim(), color: newZoneColor }],
+    });
     setNewZoneName('');
     setNewZoneColor('#3b82f6');
     setZoneDialogOpen(false);
   };
 
   const deleteZone = (zoneId: string) => {
-    setWorld((prev) => ({
-      ...prev,
-      zones: (prev.zones || []).filter((z) => z.id !== zoneId),
-      rooms: prev.rooms.map((r) =>
+    setWorld({
+      ...world,
+      zones: (world.zones || []).filter((z) => z.id !== zoneId),
+      rooms: world.rooms.map((r) =>
         r.zone_id === zoneId ? { ...r, zone_id: undefined } : r,
       ),
-    }));
+    });
     if (filterZoneId === zoneId) setFilterZoneId(null);
   };
 
   const editZone = (zoneId: string, name: string, color: string) => {
-    setWorld((prev) => ({
-      ...prev,
-      zones: (prev.zones || []).map((z) =>
+    setWorld({
+      ...world,
+      zones: (world.zones || []).map((z) =>
         z.id === zoneId ? { ...z, name, color } : z,
       ),
-    }));
+    });
   };
 
   // Pane click — deselect room
@@ -596,6 +585,28 @@ function MapEditorInner() {
                 className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-blue-400"
               >
                 +
+              </button>
+            </Tooltip>
+          </div>
+
+          {/* Undo / Redo */}
+          <div className="flex items-center gap-1 ml-4 border-l border-gray-600 pl-4">
+            <Tooltip text="되돌리기 (Ctrl+Z)">
+              <button
+                onClick={worldHistory.undo}
+                disabled={!worldHistory.canUndo}
+                className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+              >
+                실행취소
+              </button>
+            </Tooltip>
+            <Tooltip text="다시 실행 (Ctrl+Y)">
+              <button
+                onClick={worldHistory.redo}
+                disabled={!worldHistory.canRedo}
+                className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+              >
+                다시실행
               </button>
             </Tooltip>
           </div>

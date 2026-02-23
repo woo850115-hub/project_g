@@ -130,6 +130,41 @@ export const triggerApi = {
     request<GenerateResult>('/triggers/generate', { method: 'POST' }),
 };
 
+// --- Item Effects API ---
+
+export const itemEffectsApi = {
+  generate: () =>
+    request<GenerateResult>('/items/generate', { method: 'POST' }),
+};
+
+// --- Shop API ---
+
+export const shopApi = {
+  generate: () =>
+    request<GenerateResult>('/shops/generate', { method: 'POST' }),
+};
+
+// --- Dialogue API ---
+
+export const dialogueApi = {
+  generate: () =>
+    request<GenerateResult>('/dialogues/generate', { method: 'POST' }),
+};
+
+// --- Quest API ---
+
+export const questApi = {
+  generate: () =>
+    request<GenerateResult>('/quests/generate', { method: 'POST' }),
+};
+
+// --- Generate All API ---
+
+export const generateAllApi = {
+  generateAll: () =>
+    request<ApiOk & { results: string[] }>('/generate-all', { method: 'POST' }),
+};
+
 // --- Server API ---
 
 export const serverApi = {

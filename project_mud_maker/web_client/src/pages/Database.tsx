@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { contentApi } from '../api/client';
+import { contentApi, itemEffectsApi, shopApi } from '../api/client';
 import type { ContentItem } from '../types/content';
 import { PromptDialog, ConfirmDialog, AddFieldDialog } from '../components/Modal';
 import type { FieldPreset } from '../components/Modal';
 import { Tooltip } from '../components/Tooltip';
+import { BalanceView } from '../components/BalanceView';
+import { useHistory } from '../hooks/useHistory';
 
 // Enum fields: collection → field → selectable options
 const ENUM_OPTIONS: Record<string, Record<string, { value: string; label: string }[]>> = {
@@ -16,6 +18,11 @@ const ENUM_OPTIONS: Record<string, Record<string, { value: string; label: string
       { value: 'currency', label: '화폐 (currency)' },
       { value: 'quest', label: '퀘스트 (quest)' },
       { value: 'tool', label: '도구 (tool)' },
+    ],
+    equip_slot: [
+      { value: 'weapon', label: '무기 (weapon)' },
+      { value: 'armor', label: '방어구 (armor)' },
+      { value: 'accessory', label: '장신구 (accessory)' },
     ],
   },
   skills: {
@@ -60,6 +67,8 @@ const FIELD_PRESETS: Record<string, FieldPreset[]> = {
     { key: 'attack_bonus', label: '공격력 보너스', desc: '장착 시 공격력 증가량', type: 'number' },
     { key: 'defense_bonus', label: '방어력 보너스', desc: '장착 시 방어력 증가량', type: 'number' },
     { key: 'heal_amount', label: '회복량', desc: '사용 시 HP 회복량', type: 'number' },
+    { key: 'equip_slot', label: '장착 부위', desc: '장착 가능 부위 (weapon / armor / accessory)', type: 'string' },
+    { key: 'use_message', label: '사용 메시지', desc: '소비 아이템 사용 시 표시할 메시지', type: 'string' },
   ],
   races: [
     { key: 'name', label: '이름', desc: '종족 표시 이름', type: 'string' },
@@ -92,11 +101,15 @@ export function Database() {
   const [activeCollection, setActiveCollection] = useState<string | null>(null);
   const [items, setItems] = useState<ContentItem[]>([]);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Record<string, unknown>>({});
+  const editHistory = useHistory<Record<string, unknown>>({});
+  const editData = editHistory.state;
+  const setEditData = editHistory.set;
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refItems, setRefItems] = useState<Record<string, ContentItem[]>>({});
+  const [viewMode, setViewMode] = useState<'edit' | 'balance'>('edit');
+  const [allCollectionItems, setAllCollectionItems] = useState<Record<string, ContentItem[]>>({});
 
   // Dialog states
   const [addItemDialog, setAddItemDialog] = useState(false);
@@ -125,13 +138,14 @@ export function Database() {
       const data = await contentApi.listItems(activeCollection);
       setItems(data);
       setActiveItemId(null);
-      setEditData({});
+      editHistory.replace({});
     } catch (e) {
       setError(e instanceof Error ? e.message : '\uC544\uC774\uD15C \uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCollection]);
 
-  // Load reference collections for cross-collection selectors
+  // Load reference collections for cross-collection selectors + balance view
   const loadRefCollections = useCallback(async () => {
     const needed = new Set<string>();
     for (const refs of Object.values(REF_FIELDS)) {
@@ -146,6 +160,18 @@ export function Database() {
       } catch { /* skip */ }
     }
     setRefItems(result);
+
+    // Load all collection items for balance view
+    try {
+      const cols = await contentApi.listCollections();
+      const all: Record<string, ContentItem[]> = {};
+      for (const col of cols) {
+        try {
+          all[col] = await contentApi.listItems(col);
+        } catch { /* skip */ }
+      }
+      setAllCollectionItems(all);
+    } catch { /* skip */ }
   }, []);
 
   useEffect(() => {
@@ -157,15 +183,15 @@ export function Database() {
     loadItems();
   }, [loadItems]);
 
-  // Select item for editing
+  // Select item for editing (replace = don't push to history on initial selection)
   const selectItem = (item: ContentItem) => {
     setActiveItemId(item.id);
-    setEditData({ ...item });
+    editHistory.replace({ ...item });
   };
 
   // Update a field
   const updateField = (key: string, value: unknown) => {
-    setEditData((prev) => ({ ...prev, [key]: value }));
+    setEditData({ ...editData, [key]: value });
   };
 
   // Save current item
@@ -180,7 +206,7 @@ export function Database() {
         (i) => i.id === activeItemId
       );
       if (updated) {
-        setEditData({ ...updated });
+        editHistory.replace({ ...updated });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '\uC800\uC7A5 \uC2E4\uD328');
@@ -197,7 +223,7 @@ export function Database() {
       await contentApi.updateItem(activeCollection, id, { id } as ContentItem);
       await loadItems();
       setActiveItemId(id);
-      setEditData({ id });
+      editHistory.replace({ id });
     } catch (e) {
       setError(e instanceof Error ? e.message : '\uCD94\uAC00 \uC2E4\uD328');
     }
@@ -210,7 +236,7 @@ export function Database() {
     try {
       await contentApi.deleteItem(activeCollection, activeItemId);
       setActiveItemId(null);
-      setEditData({});
+      editHistory.replace({});
       await loadItems();
     } catch (e) {
       setError(e instanceof Error ? e.message : '\uC0AD\uC81C \uC2E4\uD328');
@@ -252,17 +278,15 @@ export function Database() {
       : type === 'array' ? []
       : type === 'object' ? {}
       : '';
-    setEditData((prev) => ({ ...prev, [key]: defaultValue }));
+    setEditData({ ...editData, [key]: defaultValue });
   };
 
   // Remove a field
   const removeField = (key: string) => {
     if (key === 'id') return;
-    setEditData((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+    const next = { ...editData };
+    delete next[key];
+    setEditData(next);
   };
 
   // Filter items by search
@@ -274,6 +298,66 @@ export function Database() {
       (typeof item.name === 'string' && item.name.toLowerCase().includes(q))
     );
   });
+
+  // Generate item effects Lua
+  const generateItemEffects = async () => {
+    try {
+      await itemEffectsApi.generate();
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '아이템 효과 Lua 생성 실패');
+    }
+  };
+
+  // Generate shop Lua
+  const generateShopLua = async () => {
+    try {
+      await shopApi.generate();
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '상점 Lua 생성 실패');
+    }
+  };
+
+  // Handle switching from balance to edit with item selection
+  const handleBalanceSelect = (collection: string, itemId: string) => {
+    setViewMode('edit');
+    setActiveCollection(collection);
+    // Items will load from the collection change; queue item selection
+    setTimeout(async () => {
+      try {
+        const colItems = await contentApi.listItems(collection);
+        setItems(colItems);
+        const item = colItems.find((i) => i.id === itemId);
+        if (item) {
+          setActiveItemId(item.id);
+          editHistory.replace({ ...item });
+        }
+      } catch { /* ignore */ }
+    }, 100);
+  };
+
+  // Balance view mode
+  if (viewMode === 'balance') {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-700 bg-gray-800">
+          <button
+            onClick={() => setViewMode('edit')}
+            className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded"
+          >
+            편집
+          </button>
+          <button
+            className="px-3 py-1 text-xs bg-blue-600 rounded"
+          >
+            밸런스
+          </button>
+        </div>
+        <BalanceView collections={allCollectionItems} onSelectItem={handleBalanceSelect} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -330,6 +414,22 @@ export function Database() {
 
       {/* Left sidebar — collections + items */}
       <div className="w-64 border-r border-gray-700 bg-gray-800 flex flex-col">
+        {/* View mode toggle */}
+        <div className="flex items-center gap-1 px-3 pt-2">
+          <button
+            onClick={() => setViewMode('edit')}
+            className="px-2 py-0.5 text-xs bg-blue-600 rounded"
+          >
+            편집
+          </button>
+          <button
+            onClick={() => { loadRefCollections(); setViewMode('balance'); }}
+            className="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded"
+          >
+            밸런스
+          </button>
+        </div>
+
         {/* Collection selector */}
         <div className="p-3 border-b border-gray-700">
           <div className="flex items-center gap-2 mb-2">
@@ -422,13 +522,41 @@ export function Database() {
 
       {/* Right panel — item editor */}
       <div className="flex-1 overflow-y-auto p-6">
-        {activeItemId ? (
+        {activeItemId && activeCollection === 'shops' ? (
+          /* ===== Shop dedicated editor ===== */
+          <ShopEditor
+            editData={editData}
+            updateField={updateField}
+            availableItems={allCollectionItems['items'] || []}
+            saving={saving}
+            onSave={saveItem}
+            onDelete={() => setDeleteItemDialog(true)}
+            onGenerateLua={generateShopLua}
+            editHistory={editHistory}
+          />
+        ) : activeItemId ? (
           <>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold">
                 {(editData.name as string) || activeItemId}
               </h2>
               <div className="flex gap-2">
+                <button
+                  onClick={editHistory.undo}
+                  disabled={!editHistory.canUndo}
+                  className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+                  title="실행취소 (Ctrl+Z)"
+                >
+                  실행취소
+                </button>
+                <button
+                  onClick={editHistory.redo}
+                  disabled={!editHistory.canRedo}
+                  className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+                  title="다시실행 (Ctrl+Y)"
+                >
+                  다시실행
+                </button>
                 <button
                   onClick={saveItem}
                   disabled={saving}
@@ -601,6 +729,32 @@ export function Database() {
                   + 필드 추가
                 </button>
               </Tooltip>
+
+              {/* Item effects preview for items collection */}
+              {activeCollection === 'items' && typeof editData.item_type === 'string' && (
+                <div className="mt-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-purple-400">효과 미리보기</span>
+                    <button
+                      onClick={generateItemEffects}
+                      className="text-xs px-2 py-1 bg-purple-700 hover:bg-purple-600 rounded"
+                    >
+                      효과 Lua 생성
+                    </button>
+                  </div>
+                  <div className="text-xs text-gray-400 space-y-1">
+                    {editData.item_type === 'consumable' && (
+                      <p>사용 시 {(editData.heal_amount as number) || 0} HP 회복</p>
+                    )}
+                    {editData.item_type === 'weapon' && (
+                      <p>장착 시 공격력 +{(editData.attack_bonus as number) || 0}</p>
+                    )}
+                    {editData.item_type === 'armor' && (
+                      <p>장착 시 방어력 +{(editData.defense_bonus as number) || 0}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -609,6 +763,200 @@ export function Database() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ===== Shop Dedicated Editor =====
+
+interface ShopEditorProps {
+  editData: Record<string, unknown>;
+  updateField: (key: string, value: unknown) => void;
+  availableItems: ContentItem[];
+  saving: boolean;
+  onSave: () => void;
+  onDelete: () => void;
+  onGenerateLua: () => void;
+  editHistory: import('../hooks/useHistory').HistoryControls<Record<string, unknown>>;
+}
+
+function ShopEditor({ editData, updateField, availableItems, saving, onSave, onDelete, onGenerateLua, editHistory }: ShopEditorProps) {
+  const shopItems = (Array.isArray(editData.items) ? editData.items : []) as { item_id: string; price: number }[];
+  const sellRate = typeof editData.sell_rate === 'number' ? editData.sell_rate : 0.5;
+
+  const updateShopItems = (newItems: { item_id: string; price: number }[]) => {
+    updateField('items', newItems);
+  };
+
+  const addShopItem = () => {
+    updateShopItems([...shopItems, { item_id: '', price: 0 }]);
+  };
+
+  const removeShopItem = (index: number) => {
+    updateShopItems(shopItems.filter((_, i) => i !== index));
+  };
+
+  const updateShopItem = (index: number, patch: Partial<{ item_id: string; price: number }>) => {
+    const updated = [...shopItems];
+    updated[index] = { ...updated[index], ...patch };
+    updateShopItems(updated);
+  };
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold">
+          {(editData.name as string) || (editData.id as string) || '상점'}
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={editHistory.undo}
+            disabled={!editHistory.canUndo}
+            className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+          >
+            실행취소
+          </button>
+          <button
+            onClick={editHistory.redo}
+            disabled={!editHistory.canRedo}
+            className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+          >
+            다시실행
+          </button>
+          <button onClick={onSave} disabled={saving} className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded">
+            {saving ? '저장 중...' : '저장'}
+          </button>
+          <button onClick={onDelete} className="px-4 py-1.5 text-sm bg-red-700 hover:bg-red-600 rounded">
+            삭제
+          </button>
+        </div>
+      </div>
+
+      {/* Basic info */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">상점 이름</label>
+          <input
+            type="text"
+            value={(editData.name as string) || ''}
+            onChange={(e) => updateField('name', e.target.value)}
+            placeholder="예: 마을 잡화점"
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">NPC 이름</label>
+          <input
+            type="text"
+            value={(editData.npc_name as string) || ''}
+            onChange={(e) => updateField('npc_name', e.target.value)}
+            placeholder="예: 상인 아저씨"
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs text-gray-400 mb-1">위치 (방 이름)</label>
+        <input
+          type="text"
+          value={(editData.room_name as string) || ''}
+          onChange={(e) => updateField('room_name', e.target.value)}
+          placeholder="예: 마을 광장"
+          className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+        />
+      </div>
+
+      {/* Sell rate slider */}
+      <div>
+        <label className="block text-xs text-gray-400 mb-1">
+          매각 비율: {Math.round(sellRate * 100)}%
+        </label>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(sellRate * 100)}
+          onChange={(e) => updateField('sell_rate', Number(e.target.value) / 100)}
+          className="w-full"
+        />
+        <p className="text-[10px] text-gray-500 mt-1">
+          플레이어가 아이템을 팔 때 원래 가격의 {Math.round(sellRate * 100)}%를 받습니다
+        </p>
+      </div>
+
+      {/* Shop items table */}
+      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded">
+            판매 상품 ({shopItems.length}개)
+          </span>
+          <button onClick={addShopItem} className="text-xs text-blue-400 hover:text-blue-300">
+            + 상품 추가
+          </button>
+        </div>
+
+        {shopItems.length === 0 && (
+          <p className="text-xs text-gray-500">판매 상품이 없습니다. 상품을 추가하세요.</p>
+        )}
+
+        {/* Table header */}
+        {shopItems.length > 0 && (
+          <div className="grid grid-cols-[1fr_100px_40px] gap-2 text-xs text-gray-500 border-b border-gray-700 pb-1">
+            <span>아이템</span>
+            <span>가격 (골드)</span>
+            <span></span>
+          </div>
+        )}
+
+        {shopItems.map((si, i) => (
+          <div key={i} className="grid grid-cols-[1fr_100px_40px] gap-2 items-center">
+            {availableItems.length > 0 ? (
+              <select
+                value={si.item_id}
+                onChange={(e) => updateShopItem(i, { item_id: e.target.value })}
+                className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm"
+              >
+                <option value="">-- 아이템 선택 --</option>
+                {availableItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {(item.name as string) || item.id}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={si.item_id}
+                onChange={(e) => updateShopItem(i, { item_id: e.target.value })}
+                placeholder="아이템 ID"
+                className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm"
+              />
+            )}
+            <input
+              type="number"
+              value={si.price}
+              onChange={(e) => updateShopItem(i, { price: Number(e.target.value) || 0 })}
+              min={0}
+              className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm"
+            />
+            <button
+              onClick={() => removeShopItem(i)}
+              className="text-gray-500 hover:text-red-400 text-sm"
+            >
+              x
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Generate Lua */}
+      <button
+        onClick={onGenerateLua}
+        className="px-4 py-2 text-sm bg-purple-700 hover:bg-purple-600 rounded"
+      >
+        상점 Lua 생성
+      </button>
     </div>
   );
 }

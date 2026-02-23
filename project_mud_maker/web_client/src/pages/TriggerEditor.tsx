@@ -5,13 +5,19 @@ import type { Room } from '../types/world';
 import type { ContentItem } from '../types/content';
 import { PromptDialog, ConfirmDialog } from '../components/Modal';
 import { Tooltip } from '../components/Tooltip';
+import { useHistory } from '../hooks/useHistory';
 
 const CONDITION_TYPES = [
-  { value: 'enter_room', label: '\uBC29 \uC785\uC7A5', desc: '\uD50C\uB808\uC774\uC5B4\uAC00 \uD2B9\uC815 \uBC29\uC5D0 \uB4E4\uC5B4\uC62C \uB54C \uBC1C\uB3D9' },
-  { value: 'command', label: '\uD50C\uB808\uC774\uC5B4 \uBA85\uB839', desc: '\uD50C\uB808\uC774\uC5B4\uAC00 \uD2B9\uC815 \uBA85\uB839\uC5B4\uB97C \uC785\uB825\uD560 \uB54C \uBC1C\uB3D9' },
-  { value: 'tick_interval', label: '\uD0C0\uC774\uBA38', desc: '\uC77C\uC815 \uD2F1 \uAC04\uACA9\uC73C\uB85C \uBC18\uBCF5 \uBC1C\uB3D9 (20\uD2F1 = 1\uCD08)' },
-  { value: 'entity_death', label: '\uC5D4\uD2F0\uD2F0 \uC0AC\uB9DD', desc: '\uC5D4\uD2F0\uD2F0\uAC00 \uC8FD\uC5C8\uC744 \uB54C \uBC1C\uB3D9' },
-  { value: 'on_connect', label: '\uD50C\uB808\uC774\uC5B4 \uC811\uC18D', desc: '\uD50C\uB808\uC774\uC5B4\uAC00 \uC11C\uBC84\uC5D0 \uC811\uC18D\uD560 \uB54C \uBC1C\uB3D9' },
+  { value: 'enter_room', label: '방 입장', desc: '플레이어가 특정 방에 들어올 때 발동' },
+  { value: 'command', label: '플레이어 명령', desc: '플레이어가 특정 명령어를 입력할 때 발동' },
+  { value: 'tick_interval', label: '타이머', desc: '일정 틱 간격으로 반복 발동 (20틱 = 1초)' },
+  { value: 'entity_death', label: '엔티티 사망', desc: '엔티티가 죽었을 때 발동' },
+  { value: 'on_connect', label: '플레이어 접속', desc: '플레이어가 서버에 접속할 때 발동' },
+  { value: 'compound', label: '복합 조건', desc: '여러 조건을 AND/OR로 결합합니다' },
+  { value: 'has_item', label: '아이템 보유', desc: '플레이어가 특정 아이템을 가지고 있는지 확인' },
+  { value: 'min_gold', label: '최소 골드', desc: '플레이어 골드가 일정 이상인지 확인' },
+  { value: 'min_level', label: '최소 레벨', desc: '플레이어 레벨이 일정 이상인지 확인' },
+  { value: 'has_component', label: '컴포넌트 보유', desc: '엔티티가 특정 컴포넌트를 가지고 있는지 확인' },
 ] as const;
 
 // ECS component list for set_component action
@@ -64,6 +70,11 @@ function makeDefaultCondition(type: string): TriggerCondition {
     case 'tick_interval': return { type: 'tick_interval', interval: 60 };
     case 'entity_death': return { type: 'entity_death', content_id: '' };
     case 'on_connect': return { type: 'on_connect' };
+    case 'compound': return { type: 'compound', operator: 'and', conditions: [{ type: 'enter_room', room_id: '' }] };
+    case 'has_item': return { type: 'has_item', content_id: '' };
+    case 'min_gold': return { type: 'min_gold', amount: 0 };
+    case 'min_level': return { type: 'min_level', level: 1 };
+    case 'has_component': return { type: 'has_component', component: '' };
     default: return { type: 'on_connect' };
   }
 }
@@ -82,7 +93,9 @@ function makeDefaultAction(type: string): TriggerAction {
 }
 
 export function TriggerEditor() {
-  const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const triggersHistory = useHistory<Trigger[]>([]);
+  const triggers = triggersHistory.state;
+  const setTriggers = triggersHistory.set;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -97,10 +110,11 @@ export function TriggerEditor() {
   const loadTriggers = useCallback(async () => {
     try {
       const data = await triggerApi.list();
-      setTriggers(data);
+      triggersHistory.replace(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : '\uD2B8\uB9AC\uAC70 \uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadContent = useCallback(async () => {
@@ -128,8 +142,8 @@ export function TriggerEditor() {
   const selected = triggers.find((t) => t.id === selectedId) || null;
 
   const updateTrigger = (updated: Trigger) => {
-    setTriggers((prev) =>
-      prev.map((t) => (t.id === updated.id ? updated : t))
+    setTriggers(
+      triggers.map((t) => (t.id === updated.id ? updated : t))
     );
   };
 
@@ -150,14 +164,14 @@ export function TriggerEditor() {
       condition: { type: 'enter_room', room_id: '' },
       actions: [{ type: 'send_message', target: 'player', text: '' }],
     };
-    setTriggers((prev) => [...prev, newTrigger]);
+    setTriggers([...triggers, newTrigger]);
     setSelectedId(id);
   };
 
   const handleDelete = () => {
     if (!selectedId) return;
     setDeleteDialog(false);
-    setTriggers((prev) => prev.filter((t) => t.id !== selectedId));
+    setTriggers(triggers.filter((t) => t.id !== selectedId));
     setSelectedId(null);
   };
 
@@ -235,6 +249,22 @@ export function TriggerEditor() {
               className="flex-1 text-xs px-2 py-1 bg-purple-700 hover:bg-purple-600 rounded"
             >
               Lua 생성
+            </button>
+          </div>
+          <div className="flex gap-1 mt-1">
+            <button
+              onClick={triggersHistory.undo}
+              disabled={!triggersHistory.canUndo}
+              className="flex-1 text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+            >
+              실행취소
+            </button>
+            <button
+              onClick={triggersHistory.redo}
+              disabled={!triggersHistory.canRedo}
+              className="flex-1 text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+            >
+              다시실행
             </button>
           </div>
         </div>
@@ -535,6 +565,126 @@ function ConditionFields({ condition, rooms, contentItems, onChange }: Condition
         <p className="text-xs text-gray-500">
           플레이어가 서버에 접속할 때 발동됩니다.
         </p>
+      );
+
+    case 'has_item':
+      return (
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">아이템 이름</label>
+          <ContentSelect
+            collection="items"
+            value={condition.content_id}
+            contentItems={contentItems}
+            onChange={(v) => onChange({ ...condition, content_id: v })}
+          />
+        </div>
+      );
+
+    case 'min_gold':
+      return (
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">최소 골드</label>
+          <input
+            type="number"
+            value={condition.amount}
+            onChange={(e) => onChange({ ...condition, amount: Number(e.target.value) || 0 })}
+            min={0}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+      );
+
+    case 'min_level':
+      return (
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">최소 레벨</label>
+          <input
+            type="number"
+            value={condition.level}
+            onChange={(e) => onChange({ ...condition, level: Number(e.target.value) || 1 })}
+            min={1}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+      );
+
+    case 'has_component':
+      return (
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">컴포넌트 이름</label>
+          <input
+            type="text"
+            value={condition.component}
+            onChange={(e) => onChange({ ...condition, component: e.target.value })}
+            placeholder="예: Dead, PlayerTag, NpcTag"
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+      );
+
+    case 'compound':
+      return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400">연산자</label>
+            <select
+              value={condition.operator}
+              onChange={(e) => onChange({ ...condition, operator: e.target.value as 'and' | 'or' })}
+              className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+            >
+              <option value="and">AND (모두 만족)</option>
+              <option value="or">OR (하나라도 만족)</option>
+            </select>
+          </div>
+
+          {condition.conditions.map((sub, i) => (
+            <div key={i} className="bg-gray-700/30 border border-gray-600 rounded p-3">
+              <div className="flex items-center justify-between mb-2">
+                <select
+                  value={sub.type}
+                  onChange={(e) => {
+                    const updated = [...condition.conditions];
+                    updated[i] = makeDefaultCondition(e.target.value);
+                    onChange({ ...condition, conditions: updated });
+                  }}
+                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs"
+                >
+                  {CONDITION_TYPES.filter((c) => c.value !== 'compound').map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+                {condition.conditions.length > 1 && (
+                  <button
+                    onClick={() => {
+                      const updated = condition.conditions.filter((_, j) => j !== i);
+                      onChange({ ...condition, conditions: updated });
+                    }}
+                    className="text-xs text-gray-500 hover:text-red-400"
+                  >
+                    제거
+                  </button>
+                )}
+              </div>
+              <ConditionFields
+                condition={sub}
+                rooms={rooms}
+                contentItems={contentItems}
+                onChange={(c) => {
+                  const updated = [...condition.conditions];
+                  updated[i] = c;
+                  onChange({ ...condition, conditions: updated });
+                }}
+              />
+            </div>
+          ))}
+
+          <button
+            onClick={() => onChange({ ...condition, conditions: [...condition.conditions, makeDefaultCondition('enter_room')] })}
+            className="text-xs text-blue-400 hover:text-blue-300"
+          >
+            + 하위 조건 추가
+          </button>
+        </div>
       );
   }
 }

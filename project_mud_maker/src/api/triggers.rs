@@ -54,6 +54,19 @@ pub enum TriggerCondition {
     },
     #[serde(rename = "on_connect")]
     OnConnect,
+    #[serde(rename = "has_item")]
+    HasItem { content_id: String },
+    #[serde(rename = "min_gold")]
+    MinGold { amount: u32 },
+    #[serde(rename = "min_level")]
+    MinLevel { level: u32 },
+    #[serde(rename = "has_component")]
+    HasComponent { component: String },
+    #[serde(rename = "compound")]
+    Compound {
+        operator: String,
+        conditions: Vec<TriggerCondition>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,6 +270,25 @@ fn save_triggers_file(
     })
 }
 
+/// Called by generate_all.
+pub fn generate_triggers_lua_inner(state: &AppState) -> Result<String, String> {
+    let path = triggers_file_path(state);
+    let data: TriggerData = if path.exists() {
+        let text = std::fs::read_to_string(&path).map_err(|e| format!("Read error: {e}"))?;
+        serde_json::from_str(&text).map_err(|e| format!("Parse error: {e}"))?
+    } else {
+        TriggerData::default()
+    };
+    let lua = generate_triggers_lua(&data, state);
+    let scripts_dir = state.config.scripts_dir();
+    if !scripts_dir.exists() {
+        let _ = std::fs::create_dir_all(&scripts_dir);
+    }
+    let out = scripts_dir.join("05_triggers.lua");
+    std::fs::write(&out, &lua).map_err(|e| format!("Failed to write: {e}"))?;
+    Ok("scripts/05_triggers.lua".to_string())
+}
+
 // --- Lua Generator ---
 
 fn generate_triggers_lua(data: &TriggerData, state: &AppState) -> String {
@@ -284,6 +316,13 @@ fn generate_triggers_lua(data: &TriggerData, state: &AppState) -> String {
             TriggerCondition::TickInterval { .. } => tick_triggers.push(t),
             TriggerCondition::EntityDeath { .. } => death_triggers.push(t),
             TriggerCondition::OnConnect => connect_triggers.push(t),
+            // State-check conditions and compound conditions are used as sub-conditions
+            // At the top level they act like tick-interval checks
+            TriggerCondition::HasItem { .. }
+            | TriggerCondition::MinGold { .. }
+            | TriggerCondition::MinLevel { .. }
+            | TriggerCondition::HasComponent { .. }
+            | TriggerCondition::Compound { .. } => tick_triggers.push(t),
         }
     }
 
@@ -328,14 +367,30 @@ fn generate_triggers_lua(data: &TriggerData, state: &AppState) -> String {
         lua.push_str("hooks.on_tick(function(tick)\n");
 
         for t in &tick_triggers {
-            if let TriggerCondition::TickInterval { interval } = &t.condition {
-                lua.push_str(&format!(
-                    "    if tick % {} == 0 then -- {}\n",
-                    interval,
-                    escape_lua(&t.name)
-                ));
-                gen_actions(&mut lua, &t.actions, "        ", &content_dir);
-                lua.push_str("    end\n");
+            match &t.condition {
+                TriggerCondition::TickInterval { interval } => {
+                    lua.push_str(&format!(
+                        "    if tick % {} == 0 then -- {}\n",
+                        interval,
+                        escape_lua(&t.name)
+                    ));
+                    gen_actions(&mut lua, &t.actions, "        ", &content_dir);
+                    lua.push_str("    end\n");
+                }
+                TriggerCondition::Compound { .. }
+                | TriggerCondition::HasItem { .. }
+                | TriggerCondition::MinGold { .. }
+                | TriggerCondition::MinLevel { .. }
+                | TriggerCondition::HasComponent { .. } => {
+                    lua.push_str(&format!("    -- Compound/state trigger: {}\n", escape_lua(&t.name)));
+                    lua.push_str("    for _, _check_ent in ipairs(ecs:query(\"PlayerTag\")) do\n");
+                    let cond_expr = gen_condition_expr(&t.condition, "_check_ent");
+                    lua.push_str(&format!("        if {} then\n", cond_expr));
+                    gen_actions(&mut lua, &t.actions, "            ", &content_dir);
+                    lua.push_str("        end\n");
+                    lua.push_str("    end\n");
+                }
+                _ => {}
             }
         }
 
@@ -377,6 +432,51 @@ fn generate_triggers_lua(data: &TriggerData, state: &AppState) -> String {
     }
 
     lua
+}
+
+/// Generate a Lua boolean expression for a condition (used for compound/state-check conditions).
+fn gen_condition_expr(cond: &TriggerCondition, entity_var: &str) -> String {
+    match cond {
+        TriggerCondition::HasItem { content_id } => {
+            format!(
+                "(function() local inv = ecs:get({e}, \"Inventory\"); if not inv or not inv.items then return false end; for _, iid in ipairs(inv.items) do if ecs:get(iid, \"Name\") == \"{name}\" then return true end end; return false end)()",
+                e = entity_var,
+                name = escape_lua(content_id)
+            )
+        }
+        TriggerCondition::MinGold { amount } => {
+            format!("(ecs:get({}, \"Gold\") or 0) >= {}", entity_var, amount)
+        }
+        TriggerCondition::MinLevel { level } => {
+            format!(
+                "(function() local l = ecs:get({}, \"Level\"); return l and l.level >= {} end)()",
+                entity_var, level
+            )
+        }
+        TriggerCondition::HasComponent { component } => {
+            format!("ecs:has({}, \"{}\")", entity_var, escape_lua(component))
+        }
+        TriggerCondition::EnterRoom { room_id } => {
+            format!(
+                "(function() local r = space:entity_room({}); return r and (ecs:get(r, \"Name\") or \"\") == \"{}\" end)()",
+                entity_var,
+                escape_lua(room_id)
+            )
+        }
+        TriggerCondition::Compound { operator, conditions } => {
+            if conditions.is_empty() {
+                return "true".to_string();
+            }
+            let op = if operator == "or" { " or " } else { " and " };
+            let parts: Vec<String> = conditions
+                .iter()
+                .map(|c| format!("({})", gen_condition_expr(c, entity_var)))
+                .collect();
+            format!("({})", parts.join(op))
+        }
+        // Other conditions not applicable in compound context — always true
+        _ => "true".to_string(),
+    }
 }
 
 fn gen_actions(lua: &mut String, actions: &[TriggerAction], indent: &str, content_dir: &std::path::Path) {

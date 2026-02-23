@@ -1,0 +1,13 @@
+[
+  {
+    "id": "village_shop",
+    "name": "마을 잡화점",
+    "npc_name": "상인 아저씨",
+    "room_name": "마을 광장",
+    "items": [
+      { "item_id": "healing_potion", "price": 20 },
+      { "item_id": "rusty_sword", "price": 50 }
+    ],
+    "sell_rate": 0.5
+  }
+]

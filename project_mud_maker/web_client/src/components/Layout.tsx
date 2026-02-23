@@ -1,6 +1,7 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
+import { generateAllApi, serverApi } from '../api/client';
 
-export type TabId = 'map' | 'database' | 'triggers' | 'scripts' | 'preview';
+export type TabId = 'map' | 'database' | 'triggers' | 'dialogues' | 'quests' | 'scripts' | 'preview';
 
 interface LayoutProps {
   activeTab: TabId;
@@ -9,14 +10,30 @@ interface LayoutProps {
 }
 
 const tabs: { id: TabId; label: string }[] = [
-  { id: 'map', label: '\uB9F5' },
-  { id: 'database', label: '\uB370\uC774\uD130\uBCA0\uC774\uC2A4' },
-  { id: 'triggers', label: '\uD2B8\uB9AC\uAC70' },
-  { id: 'scripts', label: '\uC2A4\uD06C\uB9BD\uD2B8' },
-  { id: 'preview', label: '\uBBF8\uB9AC\uBCF4\uAE30' },
+  { id: 'map', label: '맵' },
+  { id: 'database', label: '데이터베이스' },
+  { id: 'triggers', label: '트리거' },
+  { id: 'dialogues', label: '대화' },
+  { id: 'quests', label: '퀘스트' },
+  { id: 'scripts', label: '스크립트' },
+  { id: 'preview', label: '미리보기' },
 ];
 
 export function Layout({ activeTab, onTabChange, children }: LayoutProps) {
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerateAndRestart = async () => {
+    setGenerating(true);
+    try {
+      await generateAllApi.generateAll();
+      await serverApi.restart();
+    } catch {
+      // errors shown in individual pages
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
       {/* Header */}
@@ -37,6 +54,16 @@ export function Layout({ activeTab, onTabChange, children }: LayoutProps) {
             </button>
           ))}
         </nav>
+        <div className="ml-auto">
+          <button
+            onClick={handleGenerateAndRestart}
+            disabled={generating}
+            className="px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded flex items-center gap-1.5"
+            title="모든 Lua 생성 + 서버 재시작"
+          >
+            {generating ? '생성 중...' : '전체 생성 + 재시작'}
+          </button>
+        </div>
       </header>
 
       {/* Content */}

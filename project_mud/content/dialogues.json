@@ -1,0 +1,24 @@
+[
+  {
+    "id": "guard_dialogue",
+    "npc_name": "경비병",
+    "nodes": [
+      {
+        "id": "start",
+        "text": "멈춰라! 무슨 용무인가?",
+        "choices": [
+          { "text": "고블린에 대해 물어본다", "next": "goblin_info" },
+          { "text": "그냥 지나간다", "next": null }
+        ]
+      },
+      {
+        "id": "goblin_info",
+        "text": "최근 고블린이 마을 근처까지 내려왔다. 처치해줄 수 있나?",
+        "choices": [
+          { "text": "도와드리겠습니다", "next": null, "action": "start_quest:goblin_hunt" },
+          { "text": "생각해보겠습니다", "next": null }
+        ]
+      }
+    ]
+  }
+]

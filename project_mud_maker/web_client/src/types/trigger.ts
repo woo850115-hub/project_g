@@ -3,7 +3,12 @@ export type TriggerCondition =
   | { type: 'command'; command: string }
   | { type: 'tick_interval'; interval: number }
   | { type: 'entity_death'; content_id: string }
-  | { type: 'on_connect' };
+  | { type: 'on_connect' }
+  | { type: 'has_item'; content_id: string }
+  | { type: 'min_gold'; amount: number }
+  | { type: 'min_level'; level: number }
+  | { type: 'has_component'; component: string }
+  | { type: 'compound'; operator: 'and' | 'or'; conditions: TriggerCondition[] };
 
 export type TriggerAction =
   | { type: 'send_message'; target: string; text: string }

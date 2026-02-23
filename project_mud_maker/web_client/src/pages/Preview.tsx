@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { AnsiUp } from 'ansi_up';
-import { serverApi } from '../api/client';
+import { serverApi, generateAllApi } from '../api/client';
 import type { ServerStatus } from '../types/api';
 import { Tooltip } from '../components/Tooltip';
 
@@ -228,7 +228,22 @@ export function Preview() {
       await new Promise((r) => setTimeout(r, 2000));
       await refreshStatus();
     } catch (e) {
-      setError(e instanceof Error ? e.message : '\uC11C\uBC84 \uC7AC\uC2DC\uC791 \uC2E4\uD328');
+      setError(e instanceof Error ? e.message : '서버 재시작 실패');
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const generateAllAndRestart = async () => {
+    setStopping(true);
+    disconnectTerminal();
+    try {
+      await generateAllApi.generateAll();
+      await serverApi.restart();
+      await new Promise((r) => setTimeout(r, 2000));
+      await refreshStatus();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '전체 생성+재시작 실패');
     } finally {
       setStopping(false);
     }
@@ -283,6 +298,15 @@ export function Preview() {
               >
                 연결 해제
               </button>
+              <Tooltip text="모든 Lua 생성 후 서버 재시작">
+                <button
+                  onClick={generateAllAndRestart}
+                  disabled={stopping}
+                  className="px-3 py-1 text-xs bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded"
+                >
+                  전체 생성+재시작
+                </button>
+              </Tooltip>
               <button
                 onClick={restartServer}
                 disabled={stopping}

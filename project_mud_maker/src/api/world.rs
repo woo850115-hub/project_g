@@ -244,6 +244,28 @@ async fn generate_lua(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+/// Called by generate_all to generate world Lua without going through axum handler.
+pub fn generate_world_lua_inner(state: &AppState) -> Result<String, String> {
+    let world = load_world_sync(state)?;
+    let lua = generate_world_lua(&world, state);
+    let scripts_dir = state.config.scripts_dir();
+    if !scripts_dir.exists() {
+        let _ = std::fs::create_dir_all(&scripts_dir);
+    }
+    let path = scripts_dir.join("01_world_setup.lua");
+    std::fs::write(&path, &lua).map_err(|e| format!("Failed to write: {e}"))?;
+    Ok("scripts/01_world_setup.lua".to_string())
+}
+
+fn load_world_sync(state: &AppState) -> Result<WorldData, String> {
+    let path = world_file_path(state);
+    if !path.exists() {
+        return Ok(WorldData::default());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("Read error: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("Parse error: {e}"))
+}
+
 // --- File I/O ---
 
 fn world_file_path(state: &AppState) -> std::path::PathBuf {
