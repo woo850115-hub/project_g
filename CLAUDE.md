@@ -37,6 +37,14 @@ Rust 기반 MUD/2D MMORPG 겸용 게임 엔진. 공유 엔진 코어 위에 Text
   - 엔진 crate 10개: engine/crates/ 이동
   - project_mud: MUD 전용 바이너리 + mud/player_db crate + MUD 테스트 10개
   - project_2d: Grid 전용 바이너리 + 독립 Name 컴포넌트 + Grid 테스트 4개
+- **Phase 16 (MUD Game Maker — Phase 1 뼈대 + 콘텐츠 DB): 진행 중**
+  - maker_common crate: 콘텐츠 CRUD, 스크립트 CRUD, 서버 프로세스 관리 (공유)
+  - project_mud_maker: axum 백엔드 + React/TypeScript/TailwindCSS 프론트엔드
+  - 콘텐츠 API: GET/PUT/DELETE /api/content/:collection/:id (파일 기반 JSON CRUD)
+  - 스크립트 API: GET/PUT/DELETE /api/scripts/:filename (Lua 파일 CRUD)
+  - 서버 관리 API: /api/server/start|stop|restart|status (자식 프로세스 관리)
+  - 프론트엔드: 탭 레이아웃 (Map/Database/Scripts/Preview), 데이터베이스 탭 구현
+  - 향후: project_2d_maker 추가 예정 (maker_common 공유)
 
 **현재 테스트: 337개 전체 통과**
 
@@ -102,6 +110,21 @@ project_g/
 │   ├── web_dist/               빌드된 클라이언트 정적 파일
 │   ├── server.toml             Grid 서버 설정
 │   └── tests/                  Grid 통합 테스트 (4개)
+├── maker_common/               게임 메이커 공유 crate (콘텐츠/스크립트 CRUD, 프로세스 관리)
+│   └── src/
+│       ├── content.rs          파일 기반 JSON 콘텐츠 CRUD (ContentDir trait)
+│       ├── scripts.rs          파일 기반 Lua 스크립트 CRUD (ScriptsDir trait)
+│       └── process.rs          게임 서버 자식 프로세스 관리 (ProcessManager)
+├── project_mud_maker/          MUD 게임 메이커 (웹 기반 에디터)
+│   ├── Cargo.toml              바이너리 패키지 (mud_maker)
+│   ├── src/
+│   │   ├── main.rs             axum 서버 (REST API + 정적 파일 서빙)
+│   │   ├── config.rs           MudMakerConfig (server, project 섹션)
+│   │   ├── state.rs            AppState (ContentDir, ScriptsDir, HasProcessManager 구현)
+│   │   └── api/mod.rs          라우터 조립 (content, scripts, server)
+│   ├── web_client/             React + TypeScript + TailwindCSS + Vite
+│   ├── web_dist/               프론트엔드 빌드 산출물
+│   └── server.toml             메이커 설정 (addr, mud_dir, mud_config)
 ├── plugins/                    테스트용 WASM 플러그인 소스 (workspace exclude)
 │   ├── test_movement/          3틱마다 MoveEntity 명령 발행
 │   ├── test_infinite_loop/     무한루프 (fuel exhaustion 테스트)
@@ -127,6 +150,8 @@ plugin_abi → (독립, no_std)
 ecs_adapter → bevy_ecs (내부만, 외부 노출 금지)
 project_mud → 엔진 crate 전체 + mud + player_db
 project_2d → 엔진 crate (persistence 제외) + bevy_ecs(derive only)
+maker_common → axum, tokio, serde, serde_json, tracing (엔진 비의존)
+project_mud_maker → maker_common, axum, tower-http, tokio, serde, toml
 ```
 
 ### PersistenceRegistry 패턴
@@ -274,9 +299,16 @@ npm install          # 의존성 설치
 npm run build        # 프로덕션 빌드 → project_2d/web_dist/
 npm run dev          # 개발 서버 (Vite HMR, :5173, /ws proxy → :4001)
 
+# MUD Game Maker 웹 클라이언트
+cd /home/genos/workspace/project_g/project_mud_maker/web_client
+npm install          # 의존성 설치
+npm run build        # 프로덕션 빌드 → project_mud_maker/web_dist/
+npm run dev          # 개발 서버 (Vite HMR, :5174, /api proxy → :3000)
+
 # 서버 실행
 cargo run -p project_mud -- --config project_mud/server.toml    # MUD 서버 (telnet localhost 4000)
 cargo run -p project_2d -- --config project_2d/server.toml      # Grid 서버 (http://localhost:4001/)
+cargo run -p project_mud_maker                                   # MUD Game Maker (http://localhost:3000/)
 ```
 
 ## 기술 스택
@@ -299,9 +331,11 @@ cargo run -p project_2d -- --config project_2d/server.toml      # Grid 서버 (h
 | WebSocket | tokio-tungstenite 0.24 + futures-util 0.3 |
 | 웹 서버 | axum 0.8 (ws) + tower-http 0.6 (fs) |
 | JSON 프로토콜 | serde_json 1 |
-| 웹 클라이언트 | TypeScript 5.7 + Vite 6 + PixiJS 8 |
+| 웹 클라이언트 (2D) | TypeScript 5.7 + Vite 6 + PixiJS 8 |
+| 웹 클라이언트 (Maker) | React 19 + TypeScript 5 + Vite 7 + TailwindCSS 4 |
 | Telnet 포트 | 0.0.0.0:4000 (project_mud/server.toml에서 설정 가능) |
 | 웹/WS 포트 | 0.0.0.0:4001 (project_2d/server.toml에서 설정 가능) |
+| Maker 포트 | 0.0.0.0:3000 (project_mud_maker/server.toml에서 설정 가능) |
 
 ## 코딩 컨벤션
 

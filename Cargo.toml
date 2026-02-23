@@ -15,6 +15,8 @@ members = [
     "project_mud/crates/mud",
     "project_mud/crates/player_db",
     "project_2d",
+    "maker_common",
+    "project_mud_maker",
 ]
 exclude = ["plugins/test_movement", "plugins/test_infinite_loop", "plugins/test_panic"]
 
@@ -32,6 +34,7 @@ persistence = { path = "engine/crates/persistence" }
 net = { path = "engine/crates/net" }
 mud = { path = "project_mud/crates/mud" }
 player_db = { path = "project_mud/crates/player_db" }
+maker_common = { path = "maker_common" }
 
 # External dependencies
 serde = { version = "1", features = ["derive"] }
@@ -45,4 +48,4 @@ tokio-tungstenite = "0.24"
 serde_json = "1"
 futures-util = "0.3"
 axum = { version = "0.8", features = ["ws"] }
-tower-http = { version = "0.6", features = ["fs"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }

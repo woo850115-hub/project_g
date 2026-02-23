@@ -1,0 +1,7 @@
+[server]
+addr = "0.0.0.0:3000"
+web_static_dir = "project_mud_maker/web_dist"
+
+[project]
+mud_dir = "project_mud"
+mud_config = "project_mud/server.toml"

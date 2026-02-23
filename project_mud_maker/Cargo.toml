@@ -1,0 +1,19 @@
+[package]
+name = "project_mud_maker"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mud_maker"
+path = "src/main.rs"
+
+[dependencies]
+maker_common = { workspace = true }
+axum = { workspace = true }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+toml = "0.8"

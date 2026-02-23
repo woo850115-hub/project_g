@@ -1327,6 +1327,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "maker_common"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1729,6 +1740,21 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wasmtime",
+]
+
+[[package]]
+name = "project_mud_maker"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "maker_common",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 0.8.23",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
