@@ -3,6 +3,7 @@ import Editor, { type OnMount, type Monaco } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { scriptsApi } from '../api/client';
 import type { ScriptFile } from '../types/api';
+import { PromptDialog, ConfirmDialog } from '../components/Modal';
 
 // Lua API completions for the MUD engine
 const LUA_API_ITEMS = [
@@ -54,6 +55,14 @@ export function ScriptEditor() {
   const [error, setError] = useState<string | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
+  // Dialog states
+  const [createDialog, setCreateDialog] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [discardDialog, setDiscardDialog] = useState<{
+    open: boolean;
+    pendingFile: string;
+  }>({ open: false, pendingFile: '' });
+
   const loadFiles = useCallback(async () => {
     try {
       const list = await scriptsApi.list();
@@ -68,7 +77,14 @@ export function ScriptEditor() {
   }, [loadFiles]);
 
   const openFile = async (filename: string) => {
-    if (dirty && !confirm('Unsaved changes will be lost. Continue?')) return;
+    if (dirty) {
+      setDiscardDialog({ open: true, pendingFile: filename });
+      return;
+    }
+    await doOpenFile(filename);
+  };
+
+  const doOpenFile = async (filename: string) => {
     try {
       const data = await scriptsApi.get(filename);
       setActiveFile(filename);
@@ -77,6 +93,12 @@ export function ScriptEditor() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to open file');
     }
+  };
+
+  const handleDiscardConfirm = () => {
+    const file = discardDialog.pendingFile;
+    setDiscardDialog({ open: false, pendingFile: '' });
+    doOpenFile(file);
   };
 
   const saveFile = async () => {
@@ -92,9 +114,8 @@ export function ScriptEditor() {
     }
   };
 
-  const createFile = async () => {
-    const filename = prompt('Enter filename (e.g. 05_quests.lua):');
-    if (!filename) return;
+  const handleCreateFile = async (filename: string) => {
+    setCreateDialog(false);
     if (!filename.endsWith('.lua')) {
       setError('Filename must end with .lua');
       return;
@@ -102,15 +123,16 @@ export function ScriptEditor() {
     try {
       await scriptsApi.create(filename, `-- ${filename}\n`);
       await loadFiles();
-      await openFile(filename);
+      setDirty(false);
+      await doOpenFile(filename);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Create failed');
     }
   };
 
-  const deleteFile = async () => {
+  const handleDeleteFile = async () => {
     if (!activeFile) return;
-    if (!confirm(`Delete "${activeFile}"?`)) return;
+    setDeleteDialog(false);
     try {
       await scriptsApi.delete(activeFile);
       setActiveFile(null);
@@ -141,12 +163,10 @@ export function ScriptEditor() {
           endColumn: word.endColumn,
         };
 
-        // Also check the text before the cursor for `:` or `.` triggers
         const lineContent = model.getLineContent(position.lineNumber);
         const textBefore = lineContent.substring(0, position.column - 1);
 
         const suggestions = LUA_API_ITEMS.filter((item) => {
-          // Match if typing the prefix (e.g. "ecs", "space", "hooks")
           return (
             item.label.toLowerCase().includes(word.word.toLowerCase()) ||
             textBefore.endsWith(item.label.split(/[:.]/)[0] + ':') ||
@@ -177,12 +197,39 @@ export function ScriptEditor() {
         </div>
       )}
 
+      {/* Dialogs */}
+      <PromptDialog
+        open={createDialog}
+        title="New Script"
+        label="Filename (e.g. 05_quests.lua)"
+        placeholder="05_quests.lua"
+        onSubmit={handleCreateFile}
+        onCancel={() => setCreateDialog(false)}
+      />
+      <ConfirmDialog
+        open={deleteDialog}
+        title="Delete Script"
+        message={`Delete "${activeFile}"?`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteFile}
+        onCancel={() => setDeleteDialog(false)}
+      />
+      <ConfirmDialog
+        open={discardDialog.open}
+        title="Unsaved Changes"
+        message="Unsaved changes will be lost. Continue?"
+        confirmLabel="Discard"
+        confirmClass="bg-yellow-600 hover:bg-yellow-500"
+        onConfirm={handleDiscardConfirm}
+        onCancel={() => setDiscardDialog({ open: false, pendingFile: '' })}
+      />
+
       {/* File list sidebar */}
       <div className="w-56 border-r border-gray-700 bg-gray-800 flex flex-col">
         <div className="p-3 border-b border-gray-700 flex items-center justify-between">
           <span className="text-sm font-medium text-gray-300">Scripts</span>
           <button
-            onClick={createFile}
+            onClick={() => setCreateDialog(true)}
             className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded"
           >
             + New
@@ -227,7 +274,7 @@ export function ScriptEditor() {
                 {saving ? 'Saving...' : 'Save'}
               </button>
               <button
-                onClick={deleteFile}
+                onClick={() => setDeleteDialog(true)}
                 className="px-3 py-1 text-xs bg-red-700 hover:bg-red-600 rounded"
               >
                 Delete

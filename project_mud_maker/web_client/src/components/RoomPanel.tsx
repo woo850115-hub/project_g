@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Room, PlacedEntity } from '../types/world';
 import { contentApi } from '../api/client';
 import type { ContentItem } from '../types/content';
+import { AddExitDialog, AddEntityDialog } from './Modal';
 
 const DIRECTIONS = ['north', 'south', 'east', 'west', 'up', 'down'] as const;
 
@@ -15,6 +16,8 @@ interface RoomPanelProps {
 
 export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: RoomPanelProps) {
   const [contentItems, setContentItems] = useState<Record<string, ContentItem[]>>({});
+  const [exitDialogOpen, setExitDialogOpen] = useState(false);
+  const [entityDialogOpen, setEntityDialogOpen] = useState(false);
 
   // Load content items for available collections
   useEffect(() => {
@@ -40,24 +43,15 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
   );
 
   // Exit management
-  const addExit = () => {
-    const dir = prompt(`Direction? (${DIRECTIONS.join(', ')})`);
-    if (!dir || !DIRECTIONS.includes(dir as typeof DIRECTIONS[number])) return;
-    if (room.exits[dir]) {
-      alert(`Exit "${dir}" already exists`);
-      return;
-    }
-    const targets = allRooms.filter((r) => r.id !== room.id);
-    if (targets.length === 0) {
-      alert('No other rooms to connect to');
-      return;
-    }
-    const targetId = prompt(
-      `Target room?\n${targets.map((r) => `  ${r.id} (${r.name})`).join('\n')}`,
-    );
-    if (!targetId || !targets.some((r) => r.id === targetId)) return;
+  const usedDirections = Object.keys(room.exits);
+  const availableDirections = DIRECTIONS.filter((d) => !usedDirections.includes(d));
+  const targetRooms = allRooms
+    .filter((r) => r.id !== room.id)
+    .map((r) => ({ id: r.id, name: r.name || r.id }));
 
-    update({ exits: { ...room.exits, [dir]: targetId } });
+  const handleAddExit = (direction: string, targetId: string) => {
+    update({ exits: { ...room.exits, [direction]: targetId } });
+    setExitDialogOpen(false);
   };
 
   const removeExit = (dir: string) => {
@@ -67,25 +61,10 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
   };
 
   // Entity management
-  const addEntity = () => {
-    const type = prompt('Entity type? (npc, item)');
-    if (!type || !['npc', 'item'].includes(type)) return;
-
-    const collection = type === 'npc' ? 'monsters' : 'items';
-    const items = contentItems[collection] || [];
-
-    let contentId: string | null;
-    if (items.length > 0) {
-      contentId = prompt(
-        `Content ID?\n${items.map((i) => `  ${i.id}`).join('\n')}`,
-      );
-    } else {
-      contentId = prompt('Content ID:');
-    }
-    if (!contentId) return;
-
+  const handleAddEntity = (type: string, contentId: string) => {
     const entity: PlacedEntity = { type, content_id: contentId };
     update({ entities: [...room.entities, entity] });
+    setEntityDialogOpen(false);
   };
 
   const removeEntity = (index: number) => {
@@ -94,6 +73,21 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
 
   return (
     <div className="p-4 space-y-5">
+      {/* Dialogs */}
+      <AddExitDialog
+        open={exitDialogOpen}
+        availableDirections={[...availableDirections]}
+        targetRooms={targetRooms}
+        onSubmit={handleAddExit}
+        onCancel={() => setExitDialogOpen(false)}
+      />
+      <AddEntityDialog
+        open={entityDialogOpen}
+        contentItems={contentItems}
+        onSubmit={handleAddEntity}
+        onCancel={() => setEntityDialogOpen(false)}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-gray-100">{room.name || room.id}</h3>
@@ -140,7 +134,10 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs text-gray-400 font-medium">Exits</label>
-          <button onClick={addExit} className="text-xs text-blue-400 hover:text-blue-300">
+          <button
+            onClick={() => setExitDialogOpen(true)}
+            className="text-xs text-blue-400 hover:text-blue-300"
+          >
             + Add
           </button>
         </div>
@@ -177,7 +174,10 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs text-gray-400 font-medium">Entities</label>
-          <button onClick={addEntity} className="text-xs text-blue-400 hover:text-blue-300">
+          <button
+            onClick={() => setEntityDialogOpen(true)}
+            className="text-xs text-blue-400 hover:text-blue-300"
+          >
             + Add
           </button>
         </div>

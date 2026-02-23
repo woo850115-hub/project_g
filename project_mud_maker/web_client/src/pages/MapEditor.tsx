@@ -19,6 +19,7 @@ import { worldApi, contentApi } from '../api/client';
 import type { Room, WorldData } from '../types/world';
 import { RoomNode } from '../components/RoomNode';
 import { RoomPanel } from '../components/RoomPanel';
+import { AddRoomDialog, ConnectDialog, ConfirmDialog } from '../components/Modal';
 
 const DIRECTIONS = ['north', 'south', 'east', 'west', 'up', 'down'] as const;
 const OPPOSITE: Record<string, string> = {
@@ -34,6 +35,19 @@ export function MapEditor() {
   const [saving, setSaving] = useState(false);
   const [luaPreview, setLuaPreview] = useState<string | null>(null);
   const [collections, setCollections] = useState<string[]>([]);
+
+  // Dialog states
+  const [addRoomOpen, setAddRoomOpen] = useState(false);
+  const [connectDialog, setConnectDialog] = useState<{
+    open: boolean;
+    source: string;
+    target: string;
+  }>({ open: false, source: '', target: '' });
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    roomId: string;
+    roomName: string;
+  }>({ open: false, roomId: '', roomName: '' });
 
   const nodeTypes = useMemo(() => ({ room: RoomNode }), []);
 
@@ -74,7 +88,6 @@ export function MapEditor() {
       if (edgeSet.has(edgeId)) continue;
       edgeSet.add(edgeId);
 
-      // Find reverse direction
       const targetRoom = world.rooms.find((r) => r.id === targetId);
       const reverseDir = targetRoom
         ? Object.entries(targetRoom.exits).find(([, t]) => t === room.id)?.[0]
@@ -97,10 +110,8 @@ export function MapEditor() {
   // Handle node position changes
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
-      // Apply visual changes
       const updatedNodes = applyNodeChanges(changes, nodes);
 
-      // Update world data with new positions
       setWorld((prev) => {
         const updated = { ...prev, rooms: [...prev.rooms] };
         for (const change of changes) {
@@ -117,7 +128,6 @@ export function MapEditor() {
         return updated;
       });
 
-      // Handle selection
       for (const change of changes) {
         if (change.type === 'select' && change.selected) {
           setSelectedRoomId(change.id);
@@ -136,42 +146,38 @@ export function MapEditor() {
     [edges],
   );
 
-  // Handle new edge connection (create exit)
+  // Handle new edge connection — open dialog
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      const dir = prompt(`Direction from source to target?\n(${DIRECTIONS.join(', ')})`);
-      if (!dir || !DIRECTIONS.includes(dir as typeof DIRECTIONS[number])) return;
-
-      const bidir = confirm('Create bidirectional exit?');
-
-      setWorld((prev) => {
-        const updated = { ...prev, rooms: prev.rooms.map((r) => ({ ...r })) };
-        const src = updated.rooms.find((r) => r.id === connection.source);
-        const tgt = updated.rooms.find((r) => r.id === connection.target);
-        if (src) {
-          src.exits = { ...src.exits, [dir]: connection.target! };
-        }
-        if (bidir && tgt && OPPOSITE[dir]) {
-          tgt.exits = { ...tgt.exits, [OPPOSITE[dir]]: connection.source! };
-        }
-        return updated;
+      setConnectDialog({
+        open: true,
+        source: connection.source,
+        target: connection.target,
       });
     },
     [],
   );
 
-  // Add new room
-  const addRoom = () => {
-    const id = prompt('Room ID (e.g. tavern):');
-    if (!id) return;
-    if (world.rooms.some((r) => r.id === id)) {
-      setError('Room ID already exists');
-      return;
-    }
+  const handleConnect = (direction: string, bidirectional: boolean) => {
+    const { source, target } = connectDialog;
+    setWorld((prev) => {
+      const updated = { ...prev, rooms: prev.rooms.map((r) => ({ ...r })) };
+      const src = updated.rooms.find((r) => r.id === source);
+      const tgt = updated.rooms.find((r) => r.id === target);
+      if (src) {
+        src.exits = { ...src.exits, [direction]: target };
+      }
+      if (bidirectional && tgt && OPPOSITE[direction]) {
+        tgt.exits = { ...tgt.exits, [OPPOSITE[direction]]: source };
+      }
+      return updated;
+    });
+    setConnectDialog({ open: false, source: '', target: '' });
+  };
 
-    const name = prompt('Room name:') || id;
-
+  // Add new room — dialog callback
+  const handleAddRoom = (id: string, name: string) => {
     setWorld((prev) => ({
       ...prev,
       rooms: [
@@ -187,10 +193,17 @@ export function MapEditor() {
       ],
     }));
     setSelectedRoomId(id);
+    setAddRoomOpen(false);
   };
 
   // Delete room
-  const deleteRoom = (roomId: string) => {
+  const requestDeleteRoom = (roomId: string) => {
+    const room = world.rooms.find((r) => r.id === roomId);
+    setDeleteDialog({ open: true, roomId, roomName: room?.name || roomId });
+  };
+
+  const handleDeleteRoom = () => {
+    const { roomId } = deleteDialog;
     setWorld((prev) => {
       const rooms = prev.rooms
         .filter((r) => r.id !== roomId)
@@ -203,6 +216,7 @@ export function MapEditor() {
       return { ...prev, rooms };
     });
     if (selectedRoomId === roomId) setSelectedRoomId(null);
+    setDeleteDialog({ open: false, roomId: '', roomName: '' });
   };
 
   // Update selected room
@@ -248,12 +262,36 @@ export function MapEditor() {
         </div>
       )}
 
+      {/* Dialogs */}
+      <AddRoomDialog
+        open={addRoomOpen}
+        existingIds={world.rooms.map((r) => r.id)}
+        onSubmit={handleAddRoom}
+        onCancel={() => setAddRoomOpen(false)}
+      />
+      <ConnectDialog
+        open={connectDialog.open}
+        sourceId={connectDialog.source}
+        targetId={connectDialog.target}
+        directions={[...DIRECTIONS]}
+        onSubmit={handleConnect}
+        onCancel={() => setConnectDialog({ open: false, source: '', target: '' })}
+      />
+      <ConfirmDialog
+        open={deleteDialog.open}
+        title="Delete Room"
+        message={`Delete room "${deleteDialog.roomName}"? All exits to this room will also be removed.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteRoom}
+        onCancel={() => setDeleteDialog({ open: false, roomId: '', roomName: '' })}
+      />
+
       {/* Canvas area */}
       <div className="flex-1 flex flex-col">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-700 bg-gray-800">
           <button
-            onClick={addRoom}
+            onClick={() => setAddRoomOpen(true)}
             className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded"
           >
             + Add Room
@@ -329,7 +367,7 @@ export function MapEditor() {
             allRooms={world.rooms}
             collections={collections}
             onChange={updateRoom}
-            onDelete={() => deleteRoom(selectedRoom.id)}
+            onDelete={() => requestDeleteRoom(selectedRoom.id)}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">
