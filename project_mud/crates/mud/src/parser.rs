@@ -49,13 +49,17 @@ pub enum PlayerAction {
 }
 
 /// Parse raw user input into a PlayerAction.
+///
+/// Format: `[argument] [command]` — the last word is the command, preceding words are the argument.
+/// Single-word commands (e.g. "보기", "북", "도움말") work as before.
+/// Admin commands (/command args) keep the original order.
 pub fn parse_input(input: &str) -> PlayerAction {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return PlayerAction::Look;
     }
 
-    // Admin commands start with /
+    // Admin commands start with / — keep [command] [args] order
     if trimmed.starts_with('/') {
         let without_slash = &trimmed[1..];
         let mut parts = without_slash.splitn(2, ' ');
@@ -68,48 +72,67 @@ pub fn parse_input(input: &str) -> PlayerAction {
     }
 
     let lower = trimmed.to_lowercase();
-    let mut parts = lower.splitn(2, ' ');
-    let cmd = parts.next().unwrap_or("");
-    let arg = parts.next().unwrap_or("").trim().to_string();
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    if words.is_empty() {
+        return PlayerAction::Look;
+    }
+
+    // Last word = command, preceding words = argument
+    let cmd = words[words.len() - 1];
+    let arg = if words.len() >= 2 {
+        words[..words.len() - 1].join(" ")
+    } else {
+        String::new()
+    };
 
     match cmd {
+        // look  (ㅂ)
         "look" | "l" | "보기" | "\u{3142}" => PlayerAction::Look,
+        // movement
         "north" | "n" | "북" => PlayerAction::Move(Direction::North),
         "south" | "s" | "남" => PlayerAction::Move(Direction::South),
         "east" | "e" | "동" => PlayerAction::Move(Direction::East),
         "west" | "w" | "서" => PlayerAction::Move(Direction::West),
-        "attack" | "kill" | "k" | "공격" => {
+        // attack  (ㄱ)
+        "attack" | "kill" | "k" | "공격" | "\u{3131}" => {
             if arg.is_empty() {
                 PlayerAction::Unknown("누구를 공격할까요?".to_string())
             } else {
                 PlayerAction::Attack(arg)
             }
         }
-        "get" | "take" | "pick" | "줍기" => {
+        // get  (ㅈ)
+        "get" | "take" | "pick" | "줍기" | "\u{3148}" => {
             if arg.is_empty() {
                 PlayerAction::Unknown("무엇을 주울까요?".to_string())
             } else {
                 PlayerAction::Get(arg)
             }
         }
-        "drop" | "버리기" => {
+        // drop  (ㅂㄹ)
+        "drop" | "버리기" | "\u{3142}\u{3139}" => {
             if arg.is_empty() {
                 PlayerAction::Unknown("무엇을 버릴까요?".to_string())
             } else {
                 PlayerAction::Drop(arg)
             }
         }
+        // inventory
         "inventory" | "inv" | "i" | "가방" | "인벤" => PlayerAction::InventoryList,
-        "say" | "말" => {
+        // say  (ㅁ)
+        "say" | "말" | "\u{3141}" => {
             if arg.is_empty() {
                 PlayerAction::Unknown("무엇을 말할까요?".to_string())
             } else {
                 PlayerAction::Say(arg)
             }
         }
+        // who
         "who" | "접속자" => PlayerAction::Who,
+        // quit
         "quit" | "exit" | "종료" => PlayerAction::Quit,
-        "help" | "?" | "도움말" => PlayerAction::Help,
+        // help  (ㄷ)
+        "help" | "?" | "도움말" | "\u{3137}" => PlayerAction::Help,
         _ => PlayerAction::Unknown(trimmed.to_string()),
     }
 }
@@ -145,10 +168,25 @@ mod tests {
 
     #[test]
     fn parse_attack() {
-        assert_eq!(parse_input("공격 고블린"), PlayerAction::Attack("고블린".to_string()));
-        assert_eq!(parse_input("attack goblin"), PlayerAction::Attack("goblin".to_string()));
-        assert_eq!(parse_input("kill goblin"), PlayerAction::Attack("goblin".to_string()));
-        assert_eq!(parse_input("k goblin"), PlayerAction::Attack("goblin".to_string()));
+        // [arg] [cmd] format
+        assert_eq!(parse_input("고블린 공격"), PlayerAction::Attack("고블린".to_string()));
+        assert_eq!(parse_input("goblin attack"), PlayerAction::Attack("goblin".to_string()));
+        assert_eq!(parse_input("goblin kill"), PlayerAction::Attack("goblin".to_string()));
+        assert_eq!(parse_input("goblin k"), PlayerAction::Attack("goblin".to_string()));
+        // Abbreviation: ㄱ
+        assert_eq!(parse_input("고블린 \u{3131}"), PlayerAction::Attack("고블린".to_string()));
+    }
+
+    #[test]
+    fn parse_attack_multi_word_target() {
+        assert_eq!(
+            parse_input("goblin warrior attack"),
+            PlayerAction::Attack("goblin warrior".to_string()),
+        );
+        assert_eq!(
+            parse_input("고블린 전사 공격"),
+            PlayerAction::Attack("고블린 전사".to_string()),
+        );
     }
 
     #[test]
@@ -159,11 +197,15 @@ mod tests {
 
     #[test]
     fn parse_get_drop() {
-        assert_eq!(parse_input("줍기 물약"), PlayerAction::Get("물약".to_string()));
-        assert_eq!(parse_input("get potion"), PlayerAction::Get("potion".to_string()));
-        assert_eq!(parse_input("take sword"), PlayerAction::Get("sword".to_string()));
-        assert_eq!(parse_input("버리기 물약"), PlayerAction::Drop("물약".to_string()));
-        assert_eq!(parse_input("drop potion"), PlayerAction::Drop("potion".to_string()));
+        // [arg] [cmd] format
+        assert_eq!(parse_input("물약 줍기"), PlayerAction::Get("물약".to_string()));
+        assert_eq!(parse_input("potion get"), PlayerAction::Get("potion".to_string()));
+        assert_eq!(parse_input("sword take"), PlayerAction::Get("sword".to_string()));
+        assert_eq!(parse_input("물약 버리기"), PlayerAction::Drop("물약".to_string()));
+        assert_eq!(parse_input("potion drop"), PlayerAction::Drop("potion".to_string()));
+        // Abbreviation: ㅈ for get, ㅂㄹ for drop
+        assert_eq!(parse_input("물약 \u{3148}"), PlayerAction::Get("물약".to_string()));
+        assert_eq!(parse_input("물약 \u{3142}\u{3139}"), PlayerAction::Drop("물약".to_string()));
     }
 
     #[test]
@@ -177,8 +219,11 @@ mod tests {
 
     #[test]
     fn parse_say() {
-        assert_eq!(parse_input("말 안녕하세요"), PlayerAction::Say("안녕하세요".to_string()));
-        assert_eq!(parse_input("say hello world"), PlayerAction::Say("hello world".to_string()));
+        // [arg] [cmd] format
+        assert_eq!(parse_input("안녕하세요 말"), PlayerAction::Say("안녕하세요".to_string()));
+        assert_eq!(parse_input("hello world say"), PlayerAction::Say("hello world".to_string()));
+        // Abbreviation: ㅁ
+        assert_eq!(parse_input("안녕 \u{3141}"), PlayerAction::Say("안녕".to_string()));
     }
 
     #[test]
@@ -191,6 +236,8 @@ mod tests {
         assert_eq!(parse_input("도움말"), PlayerAction::Help);
         assert_eq!(parse_input("help"), PlayerAction::Help);
         assert_eq!(parse_input("?"), PlayerAction::Help);
+        // Abbreviation: ㄷ for help
+        assert_eq!(parse_input("\u{3137}"), PlayerAction::Help);
     }
 
     #[test]
@@ -202,17 +249,19 @@ mod tests {
     fn parse_case_insensitive() {
         assert_eq!(parse_input("NORTH"), PlayerAction::Move(Direction::North));
         assert_eq!(parse_input("Look"), PlayerAction::Look);
-        assert_eq!(parse_input("ATTACK Goblin"), PlayerAction::Attack("goblin".to_string()));
+        // [arg] [cmd] format — arg is lowercased
+        assert_eq!(parse_input("Goblin ATTACK"), PlayerAction::Attack("goblin".to_string()));
     }
 
     #[test]
     fn parse_whitespace_handling() {
         assert_eq!(parse_input("  north  "), PlayerAction::Move(Direction::North));
-        assert_eq!(parse_input("  attack   goblin  "), PlayerAction::Attack("goblin".to_string()));
+        assert_eq!(parse_input("  goblin   attack  "), PlayerAction::Attack("goblin".to_string()));
     }
 
     #[test]
     fn parse_admin_commands() {
+        // Admin commands keep /command args order
         assert_eq!(
             parse_input("/kick TestUser"),
             PlayerAction::Admin {
