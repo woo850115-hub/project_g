@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
@@ -10,16 +11,14 @@ import {
   type OnEdgesChange,
   type OnConnect,
   type Connection,
-  applyNodeChanges,
   applyEdgeChanges,
   MarkerType,
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import { worldApi, contentApi } from '../api/client';
-import type { Room, WorldData } from '../types/world';
+import type { Room, WorldData, Zone } from '../types/world';
 import { RoomNode } from '../components/RoomNode';
 import { RoomPanel } from '../components/RoomPanel';
-import { AddRoomDialog, ConnectDialog, ConfirmDialog } from '../components/Modal';
+import { AddRoomDialog, AddConnectedRoomDialog, ConnectDialog, ConfirmDialog } from '../components/Modal';
 import { Tooltip } from '../components/Tooltip';
 
 const DIRECTIONS = ['north', 'south', 'east', 'west', 'up', 'down'] as const;
@@ -29,13 +28,50 @@ const OPPOSITE: Record<string, string> = {
   up: 'down', down: 'up',
 };
 
+const DIR_LABEL_SHORT: Record<string, string> = {
+  north: '북', south: '남',
+  east: '동', west: '서',
+  up: '상', down: '하',
+};
+
+const DIR_SOURCE_HANDLE: Record<string, string> = {
+  north: 's-top', south: 's-bottom',
+  east: 's-right', west: 's-left',
+  up: 's-top', down: 's-bottom',
+};
+const DIR_TARGET_HANDLE: Record<string, string> = {
+  north: 't-bottom', south: 't-top',
+  east: 't-left', west: 't-right',
+  up: 't-bottom', down: 't-top',
+};
+
+const DIR_OFFSET: Record<string, { x: number; y: number }> = {
+  north: { x: 0, y: -200 }, south: { x: 0, y: 200 },
+  east: { x: 250, y: 0 },   west: { x: -250, y: 0 },
+  up: { x: 80, y: -150 },   down: { x: 80, y: 150 },
+};
+
 export function MapEditor() {
+  return (
+    <ReactFlowProvider>
+      <MapEditorInner />
+    </ReactFlowProvider>
+  );
+}
+
+function MapEditorInner() {
   const [world, setWorld] = useState<WorldData>({ rooms: [] });
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [luaPreview, setLuaPreview] = useState<string | null>(null);
   const [collections, setCollections] = useState<string[]>([]);
+  const [filterZoneId, setFilterZoneId] = useState<string | null>(null);
+
+  // Zone management dialog
+  const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
+  const [newZoneName, setNewZoneName] = useState('');
+  const [newZoneColor, setNewZoneColor] = useState('#3b82f6');
 
   // Dialog states
   const [addRoomOpen, setAddRoomOpen] = useState(false);
@@ -50,7 +86,24 @@ export function MapEditor() {
     roomName: string;
   }>({ open: false, roomId: '', roomName: '' });
 
+  // Connected room dialog
+  const [connectedRoomDialog, setConnectedRoomDialog] = useState<{
+    open: boolean;
+    direction: string;
+    parentRoomId: string;
+    parentRoomName: string;
+  }>({ open: false, direction: '', parentRoomId: '', parentRoomName: '' });
+
+
   const nodeTypes = useMemo(() => ({ room: RoomNode }), []);
+
+  const zones = world.zones || [];
+
+  const zoneMap = useMemo(() => {
+    const map: Record<string, Zone> = {};
+    for (const z of zones) map[z.id] = z;
+    return map;
+  }, [zones]);
 
   // Load world data
   const loadWorld = useCallback(async () => {
@@ -58,7 +111,7 @@ export function MapEditor() {
       const data = await worldApi.get();
       setWorld(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '\uC6D4\uB4DC \uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC62C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4');
+      setError(e instanceof Error ? e.message : '월드 데이터를 불러올 수 없습니다');
     }
   }, []);
 
@@ -67,77 +120,119 @@ export function MapEditor() {
     contentApi.listCollections().then(setCollections).catch(() => {});
   }, [loadWorld]);
 
-  // Convert world rooms to React Flow nodes
-  const nodes: Node[] = world.rooms.map((room) => ({
-    id: room.id,
-    type: 'room',
-    position: { x: room.position.x, y: room.position.y },
-    data: {
-      label: room.name || room.id,
-      entityCount: room.entities.length,
-      exitCount: Object.keys(room.exits).length,
-    },
-    selected: room.id === selectedRoomId,
-  }));
+  // Filter rooms by zone
+  const visibleRooms = filterZoneId
+    ? world.rooms.filter((r) => r.zone_id === filterZoneId)
+    : world.rooms;
 
-  // Convert exits to edges
-  const edges: Edge[] = [];
-  const edgeSet = new Set<string>();
-  for (const room of world.rooms) {
-    for (const [dir, targetId] of Object.entries(room.exits)) {
-      const edgeId = [room.id, targetId].sort().join('--');
-      if (edgeSet.has(edgeId)) continue;
-      edgeSet.add(edgeId);
+  // Track measured node dimensions so React Flow can show them (visibility: visible)
+  const [nodeMeasured, setNodeMeasured] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
 
-      const targetRoom = world.rooms.find((r) => r.id === targetId);
-      const reverseDir = targetRoom
-        ? Object.entries(targetRoom.exits).find(([, t]) => t === room.id)?.[0]
-        : undefined;
+  // Convert world rooms to React Flow nodes (memoized)
+  const nodes: Node[] = useMemo(() =>
+    visibleRooms.map((room) => {
+      const zone = room.zone_id ? zoneMap[room.zone_id] : undefined;
+      const measured = nodeMeasured[room.id];
+      return {
+        id: room.id,
+        type: 'room',
+        position: { x: room.position.x, y: room.position.y },
+        data: {
+          label: room.name || room.id,
+          entityCount: room.entities.length,
+          exitCount: Object.keys(room.exits).length,
+          zoneName: zone?.name,
+          zoneColor: zone?.color,
+        },
+        selected: room.id === selectedRoomId,
+        ...(measured ? { measured } : {}),
+      };
+    }),
+    [visibleRooms, zoneMap, nodeMeasured, selectedRoomId],
+  );
 
-      const label = reverseDir ? `${dir} / ${reverseDir}` : dir;
+  // Convert exits to edges (memoized)
+  const edges: Edge[] = useMemo(() => {
+    const result: Edge[] = [];
+    const edgeSet = new Set<string>();
+    const visibleIds = new Set(visibleRooms.map((r) => r.id));
+    for (const room of visibleRooms) {
+      for (const [dir, targetId] of Object.entries(room.exits)) {
+        if (!visibleIds.has(targetId)) continue;
+        const edgeId = [room.id, targetId].sort().join('--');
+        if (edgeSet.has(edgeId)) continue;
+        edgeSet.add(edgeId);
 
-      edges.push({
-        id: `${room.id}-${dir}-${targetId}`,
-        source: room.id,
-        target: targetId,
-        label,
-        style: { stroke: '#6b7280' },
-        labelStyle: { fill: '#9ca3af', fontSize: 11 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280' },
-      });
+        const targetRoom = world.rooms.find((r) => r.id === targetId);
+        const reverseDir = targetRoom
+          ? Object.entries(targetRoom.exits).find(([, t]) => t === room.id)?.[0]
+          : undefined;
+
+        const dirKo = DIR_LABEL_SHORT[dir] || dir;
+        const reverseDirKo = reverseDir ? (DIR_LABEL_SHORT[reverseDir] || reverseDir) : undefined;
+        const label = reverseDirKo ? `${dirKo} / ${reverseDirKo}` : dirKo;
+
+        result.push({
+          id: `${room.id}-${dir}-${targetId}`,
+          source: room.id,
+          target: targetId,
+          sourceHandle: DIR_SOURCE_HANDLE[dir] || 's-top',
+          targetHandle: DIR_TARGET_HANDLE[dir] || 't-bottom',
+          label,
+          style: { stroke: '#6b7280' },
+          labelStyle: { fill: '#9ca3af', fontSize: 11 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280' },
+        });
+      }
     }
-  }
+    return result;
+  }, [visibleRooms, world.rooms]);
 
-  // Handle node position changes
+  // Handle node changes (dimensions, position, selection)
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
-      const updatedNodes = applyNodeChanges(changes, nodes);
+      let hasDimensionChange = false;
 
-      setWorld((prev) => {
-        const updated = { ...prev, rooms: [...prev.rooms] };
-        for (const change of changes) {
-          if (change.type === 'position' && change.position) {
+      for (const change of changes) {
+        if (change.type === 'dimensions' && change.dimensions) {
+          hasDimensionChange = true;
+        }
+        if (change.type === 'position' && change.position) {
+          setWorld((prev) => {
+            const updated = { ...prev, rooms: [...prev.rooms] };
             const idx = updated.rooms.findIndex((r) => r.id === change.id);
             if (idx >= 0) {
               updated.rooms[idx] = {
                 ...updated.rooms[idx],
-                position: { x: change.position.x, y: change.position.y },
+                position: { x: change.position!.x, y: change.position!.y },
               };
             }
-          }
+            return updated;
+          });
         }
-        return updated;
-      });
-
-      for (const change of changes) {
         if (change.type === 'select' && change.selected) {
           setSelectedRoomId(change.id);
         }
       }
 
-      return updatedNodes;
+      if (hasDimensionChange) {
+        setNodeMeasured((prev) => {
+          const next = { ...prev };
+          for (const change of changes) {
+            if (change.type === 'dimensions' && change.dimensions) {
+              next[change.id] = {
+                width: change.dimensions.width,
+                height: change.dimensions.height,
+              };
+            }
+          }
+          return next;
+        });
+      }
     },
-    [nodes],
+    [],
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
@@ -178,7 +273,8 @@ export function MapEditor() {
   };
 
   // Add new room — dialog callback
-  const handleAddRoom = (id: string, name: string) => {
+  const handleAddRoom = (id: string, name: string, zoneId?: string) => {
+    const pos = { x: Math.random() * 400, y: Math.random() * 400 };
     setWorld((prev) => ({
       ...prev,
       rooms: [
@@ -187,14 +283,61 @@ export function MapEditor() {
           id,
           name,
           description: '',
-          position: { x: Math.random() * 400, y: Math.random() * 400 },
+          position: pos,
           exits: {},
           entities: [],
+          zone_id: zoneId || filterZoneId || undefined,
         },
       ],
     }));
     setSelectedRoomId(id);
     setAddRoomOpen(false);
+  };
+
+  // Add connected room — from compass
+  const handleAddConnectedRoom = (direction: string) => {
+    if (!selectedRoom) return;
+    setConnectedRoomDialog({
+      open: true,
+      direction,
+      parentRoomId: selectedRoom.id,
+      parentRoomName: selectedRoom.name || selectedRoom.id,
+    });
+  };
+
+  const handleConnectedRoomSubmit = (id: string, name: string) => {
+    const { direction, parentRoomId } = connectedRoomDialog;
+    const parentRoom = world.rooms.find((r) => r.id === parentRoomId);
+    if (!parentRoom) return;
+
+    const offset = DIR_OFFSET[direction] || { x: 200, y: 0 };
+    const newPos = {
+      x: parentRoom.position.x + offset.x,
+      y: parentRoom.position.y + offset.y,
+    };
+
+    setWorld((prev) => {
+      const rooms = prev.rooms.map((r) => {
+        if (r.id === parentRoomId) {
+          return { ...r, exits: { ...r.exits, [direction]: id } };
+        }
+        return r;
+      });
+      const reverseDir = OPPOSITE[direction];
+      const newRoom: Room = {
+        id,
+        name,
+        description: '',
+        position: newPos,
+        exits: reverseDir ? { [reverseDir]: parentRoomId } : {},
+        entities: [],
+        zone_id: parentRoom.zone_id,
+      };
+      return { ...prev, rooms: [...rooms, newRoom] };
+    });
+
+    setSelectedRoomId(id);
+    setConnectedRoomDialog({ open: false, direction: '', parentRoomId: '', parentRoomName: '' });
   };
 
   // Delete room
@@ -228,13 +371,55 @@ export function MapEditor() {
     }));
   };
 
+  // Zone management
+  const addZone = () => {
+    if (!newZoneName.trim()) return;
+    const id = newZoneName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (zones.some((z) => z.id === id)) {
+      setError('이미 같은 ID의 존이 있습니다');
+      return;
+    }
+    setWorld((prev) => ({
+      ...prev,
+      zones: [...(prev.zones || []), { id, name: newZoneName.trim(), color: newZoneColor }],
+    }));
+    setNewZoneName('');
+    setNewZoneColor('#3b82f6');
+    setZoneDialogOpen(false);
+  };
+
+  const deleteZone = (zoneId: string) => {
+    setWorld((prev) => ({
+      ...prev,
+      zones: (prev.zones || []).filter((z) => z.id !== zoneId),
+      rooms: prev.rooms.map((r) =>
+        r.zone_id === zoneId ? { ...r, zone_id: undefined } : r,
+      ),
+    }));
+    if (filterZoneId === zoneId) setFilterZoneId(null);
+  };
+
+  const editZone = (zoneId: string, name: string, color: string) => {
+    setWorld((prev) => ({
+      ...prev,
+      zones: (prev.zones || []).map((z) =>
+        z.id === zoneId ? { ...z, name, color } : z,
+      ),
+    }));
+  };
+
+  // Pane click — deselect room
+  const handlePaneClick = useCallback(() => {
+    setSelectedRoomId(null);
+  }, []);
+
   // Save world
   const saveWorld = async () => {
     setSaving(true);
     try {
       await worldApi.save(world);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '\uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4');
+      setError(e instanceof Error ? e.message : '저장에 실패했습니다');
     } finally {
       setSaving(false);
     }
@@ -247,7 +432,7 @@ export function MapEditor() {
       const result = await worldApi.generate();
       setLuaPreview(result.preview);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Lua \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4');
+      setError(e instanceof Error ? e.message : 'Lua 생성에 실패했습니다');
     }
   };
 
@@ -267,8 +452,18 @@ export function MapEditor() {
       <AddRoomDialog
         open={addRoomOpen}
         existingIds={world.rooms.map((r) => r.id)}
+        zones={zones}
+        defaultZoneId={filterZoneId || undefined}
         onSubmit={handleAddRoom}
         onCancel={() => setAddRoomOpen(false)}
+      />
+      <AddConnectedRoomDialog
+        open={connectedRoomDialog.open}
+        direction={connectedRoomDialog.direction}
+        parentRoomName={connectedRoomDialog.parentRoomName}
+        existingIds={world.rooms.map((r) => r.id)}
+        onSubmit={handleConnectedRoomSubmit}
+        onCancel={() => setConnectedRoomDialog({ open: false, direction: '', parentRoomId: '', parentRoomName: '' })}
       />
       <ConnectDialog
         open={connectDialog.open}
@@ -286,6 +481,54 @@ export function MapEditor() {
         onConfirm={handleDeleteRoom}
         onCancel={() => setDeleteDialog({ open: false, roomId: '', roomName: '' })}
       />
+
+      {/* Zone add dialog */}
+      {zoneDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 border border-gray-600 rounded-lg p-5 w-80 space-y-4">
+            <h3 className="text-sm font-bold">존 추가</h3>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">이름</label>
+              <input
+                type="text"
+                value={newZoneName}
+                onChange={(e) => setNewZoneName(e.target.value)}
+                placeholder="예: 마을, 숲, 던전"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && addZone()}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">색상</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={newZoneColor}
+                  onChange={(e) => setNewZoneColor(e.target.value)}
+                  className="w-8 h-8 rounded border border-gray-600 cursor-pointer"
+                />
+                <span className="text-xs text-gray-400">{newZoneColor}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setZoneDialogOpen(false); setNewZoneName(''); }}
+                className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-500 rounded"
+              >
+                취소
+              </button>
+              <button
+                onClick={addZone}
+                disabled={!newZoneName.trim()}
+                className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded"
+              >
+                추가
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Canvas area */}
       <div className="flex-1 flex flex-col">
@@ -316,22 +559,65 @@ export function MapEditor() {
               Lua 생성
             </button>
           </Tooltip>
+
+          {/* Zone filter */}
+          <div className="flex items-center gap-1 ml-4 border-l border-gray-600 pl-4">
+            <span className="text-xs text-gray-500">존:</span>
+            <button
+              onClick={() => setFilterZoneId(null)}
+              className={`px-2 py-0.5 text-xs rounded ${
+                filterZoneId === null
+                  ? 'bg-gray-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              전체
+            </button>
+            {zones.map((z) => (
+              <button
+                key={z.id}
+                onClick={() => setFilterZoneId(z.id)}
+                className={`px-2 py-0.5 text-xs rounded flex items-center gap-1 ${
+                  filterZoneId === z.id
+                    ? 'bg-gray-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full inline-block"
+                  style={{ backgroundColor: z.color }}
+                />
+                {z.name}
+              </button>
+            ))}
+            <Tooltip text="새로운 존을 추가합니다">
+              <button
+                onClick={() => setZoneDialogOpen(true)}
+                className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-blue-400"
+              >
+                +
+              </button>
+            </Tooltip>
+          </div>
+
           <span className="text-xs text-gray-500 ml-auto">
-            {world.rooms.length}개 방 | 노드를 드래그하여 출구를 연결하세요
+            {visibleRooms.length}개 방{filterZoneId ? ` (${zones.find((z) => z.id === filterZoneId)?.name})` : ''} | 노드를 드래그하여 출구를 연결하세요
           </span>
         </div>
 
         {/* React Flow canvas */}
-        <div className="flex-1">
+        <div style={{ flex: '1 1 0%', overflow: 'hidden' }}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onPaneClick={handlePaneClick}
             nodeTypes={nodeTypes}
             fitView
             colorMode="dark"
+            style={{ width: '100%', height: '100%' }}
             defaultEdgeOptions={{
               style: { stroke: '#6b7280' },
               markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280' },
@@ -340,7 +626,10 @@ export function MapEditor() {
             <Background color="#374151" gap={20} />
             <Controls />
             <MiniMap
-              nodeColor="#3b82f6"
+              nodeColor={(node) => {
+                const color = node.data?.zoneColor;
+                return typeof color === 'string' ? color : '#3b82f6';
+              }}
               maskColor="rgba(0,0,0,0.7)"
               style={{ background: '#1f2937' }}
             />
@@ -372,9 +661,13 @@ export function MapEditor() {
           <RoomPanel
             room={selectedRoom}
             allRooms={world.rooms}
+            zones={zones}
             collections={collections}
             onChange={updateRoom}
             onDelete={() => requestDeleteRoom(selectedRoom.id)}
+            onDeleteZone={deleteZone}
+            onEditZone={editZone}
+            onAddConnectedRoom={handleAddConnectedRoom}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">

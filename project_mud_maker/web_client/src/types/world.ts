@@ -9,6 +9,12 @@ export interface PlacedEntity {
   overrides?: Record<string, unknown>;
 }
 
+export interface Zone {
+  id: string;
+  name: string;
+  color: string; // hex color for map display
+}
+
 export interface Room {
   id: string;
   name: string;
@@ -16,9 +22,11 @@ export interface Room {
   position: Position;
   exits: Record<string, string>;
   entities: PlacedEntity[];
+  zone_id?: string;
 }
 
 export interface WorldData {
+  zones?: Zone[];
   rooms: Room[];
 }
 

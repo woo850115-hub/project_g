@@ -22,7 +22,7 @@ pub struct PlayerInput {
 pub struct GameContext<'a> {
     pub ecs: &'a mut EcsAdapter,
     pub space: &'a mut RoomGraphSpace,
-    pub sessions: &'a SessionManager,
+    pub sessions: &'a mut SessionManager,
     pub tick: u64,
 }
 
@@ -47,7 +47,7 @@ pub fn run_game_systems(
             let mut script_ctx: MudScriptContext<'_> = ScriptContext {
                 ecs: ctx.ecs,
                 space: ctx.space,
-                sessions: ctx.sessions,
+                sessions: &mut *ctx.sessions,
                 tick: ctx.tick,
             };
 
@@ -88,6 +88,10 @@ fn action_to_lua_info(action: &PlayerAction) -> (String, String) {
         PlayerAction::Quit => ("quit".to_string(), String::new()),
         PlayerAction::Help => ("help".to_string(), String::new()),
         PlayerAction::Admin { ref command, ref args } => ("admin".to_string(), format!("{} {}", command, args)),
+        PlayerAction::Status => ("status".to_string(), String::new()),
+        PlayerAction::Gold => ("gold".to_string(), String::new()),
+        PlayerAction::SkillList => ("skill_list".to_string(), String::new()),
+        PlayerAction::UseSkill(ref name) => ("use_skill".to_string(), name.clone()),
         PlayerAction::Unknown(text) => ("unknown".to_string(), text.clone()),
     }
 }

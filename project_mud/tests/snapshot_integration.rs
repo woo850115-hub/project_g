@@ -29,11 +29,11 @@ fn create_world_via_lua(ecs: &mut EcsAdapter, space: &mut RoomGraphSpace) -> Scr
     register_mud_script_components(engine.component_registry_mut());
     engine.load_directory(scripts_dir()).unwrap();
 
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
     let mut ctx = ScriptContext {
         ecs,
         space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     engine.run_on_init(&mut ctx).unwrap();

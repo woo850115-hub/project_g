@@ -1,0 +1,92 @@
+[
+  {
+    "id": "강타",
+    "name": "강타",
+    "description": "강력한 일격을 가합니다.",
+    "type": "attack",
+    "damage_mult": 2.0,
+    "heal_amount": 0,
+    "cooldown": 3
+  },
+  {
+    "id": "화염구",
+    "name": "화염구",
+    "description": "불꽃 구체를 발사합니다.",
+    "type": "attack",
+    "damage_mult": 2.5,
+    "heal_amount": 0,
+    "cooldown": 4
+  },
+  {
+    "id": "냉기 화살",
+    "name": "냉기 화살",
+    "description": "얼어붙는 화살을 발사합니다.",
+    "type": "attack",
+    "damage_mult": 1.8,
+    "heal_amount": 0,
+    "cooldown": 3
+  },
+  {
+    "id": "급소 공격",
+    "name": "급소 공격",
+    "description": "적의 약점을 정확히 노립니다.",
+    "type": "attack",
+    "damage_mult": 3.0,
+    "heal_amount": 0,
+    "cooldown": 5
+  },
+  {
+    "id": "전투 함성",
+    "name": "전투 함성",
+    "description": "사기를 높이는 함성과 함께 공격합니다.",
+    "type": "attack",
+    "damage_mult": 1.5,
+    "heal_amount": 0,
+    "cooldown": 4
+  },
+  {
+    "id": "분쇄",
+    "name": "분쇄",
+    "description": "무자비한 힘으로 적을 분쇄합니다.",
+    "type": "attack",
+    "damage_mult": 1.8,
+    "heal_amount": 0,
+    "cooldown": 4
+  },
+  {
+    "id": "독 바르기",
+    "name": "독 바르기",
+    "description": "독을 바른 무기로 적을 베어냅니다.",
+    "type": "attack",
+    "damage_mult": 2.0,
+    "heal_amount": 0,
+    "cooldown": 4
+  },
+  {
+    "id": "신성한 일격",
+    "name": "신성한 일격",
+    "description": "신성한 힘으로 공격하며 자신을 치유합니다.",
+    "type": "attack_heal",
+    "damage_mult": 1.5,
+    "heal_amount": 10,
+    "cooldown": 4
+  },
+  {
+    "id": "치유",
+    "name": "치유",
+    "description": "신성한 빛으로 상처를 치유합니다.",
+    "type": "heal",
+    "damage_mult": 0,
+    "heal_amount": 30,
+    "cooldown": 5
+  },
+  {
+    "id": "자연 치유",
+    "name": "자연 치유",
+    "description": "자연의 힘으로 상처를 치유합니다.",
+    "type": "heal",
+    "damage_mult": 0,
+    "heal_amount": 20,
+    "cooldown": 4
+  }
+]

@@ -163,7 +163,7 @@ fn run_grid_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Se
         let mut script_ctx = ScriptContext {
             ecs: &mut tick_loop.ecs,
             space: &mut tick_loop.space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: tick_loop.current_tick,
         };
         match script_engine.run_on_init(&mut script_ctx) {
@@ -239,7 +239,7 @@ fn run_grid_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Se
             let mut script_ctx = ScriptContext {
                 ecs: &mut tick_loop.ecs,
                 space: &mut tick_loop.space,
-                sessions: &sessions,
+                sessions: &mut sessions,
                 tick: tick_loop.current_tick,
             };
             match script_engine.run_on_tick(&mut script_ctx) {
@@ -302,7 +302,7 @@ fn handle_grid_player_input(
     };
 
     match state {
-        SessionState::AwaitingLogin => {
+        SessionState::Login => {
             let name = line.trim().to_string();
             if name.is_empty() {
                 return;
@@ -350,11 +350,6 @@ fn handle_grid_player_input(
             ));
 
             tracing::info!(?session_id, ?entity, "Grid: player spawned");
-        }
-        SessionState::AwaitingPassword { .. }
-        | SessionState::AwaitingPasswordConfirm { .. }
-        | SessionState::SelectingCharacter { .. } => {
-            // Grid mode doesn't use auth flow — ignore
         }
         SessionState::Playing => {
             let entity = match sessions.get_session(session_id).and_then(|s| s.entity) {

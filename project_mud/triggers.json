@@ -1,0 +1,116 @@
+{
+  "triggers": [
+    {
+      "id": "cave_warning",
+      "name": "어두운 동굴 경고",
+      "enabled": true,
+      "condition": {
+        "type": "enter_room",
+        "room_id": "어두운 동굴"
+      },
+      "actions": [
+        {
+          "type": "send_message",
+          "target": "player",
+          "text": "어둠 속으로 들어서자 등골이 오싹해집니다. 깊은 곳에서 희미한 긁는 소리가 울려 퍼집니다..."
+        }
+      ]
+    },
+    {
+      "id": "goblin_camp_ambush",
+      "name": "고블린 야영지 매복",
+      "enabled": true,
+      "condition": {
+        "type": "enter_room",
+        "room_id": "고블린 야영지"
+      },
+      "actions": [
+        {
+          "type": "send_message",
+          "target": "room",
+          "text": "고블린들이 경계의 비명을 지릅니다! 무기를 움켜쥐고 전투 태세를 갖춥니다!"
+        }
+      ]
+    },
+    {
+      "id": "pray_command",
+      "name": "분수대에서 기도",
+      "enabled": true,
+      "condition": {
+        "type": "command",
+        "command": "pray"
+      },
+      "actions": [
+        {
+          "type": "send_message",
+          "target": "player",
+          "text": "고대의 분수대 앞에 무릎을 꿇고 기도합니다. 따뜻한 빛이 감싸며 상처가 치유되기 시작합니다."
+        },
+        {
+          "type": "heal",
+          "target": "player",
+          "mode": "full",
+          "amount": 0
+        }
+      ]
+    },
+    {
+      "id": "goblin_chief_death_reward",
+      "name": "고블린 족장 처치 보상",
+      "enabled": true,
+      "condition": {
+        "type": "entity_death",
+        "content_id": "고블린 족장"
+      },
+      "actions": [
+        {
+          "type": "send_message",
+          "target": "room",
+          "text": "고블린 족장이 쓰러집니다! 반짝이는 왕관이 바닥을 굴러갑니다."
+        },
+        {
+          "type": "spawn_entity",
+          "entity_type": "item",
+          "content_id": "고블린_왕관",
+          "room_id": "고블린 야영지"
+        }
+      ]
+    },
+    {
+      "id": "goblin_respawn",
+      "name": "고블린 리스폰 타이머",
+      "enabled": true,
+      "condition": {
+        "type": "tick_interval",
+        "interval": 600
+      },
+      "actions": [
+        {
+          "type": "spawn_entity",
+          "entity_type": "npc",
+          "content_id": "고블린",
+          "room_id": "고블린 야영지"
+        }
+      ]
+    },
+    {
+      "id": "welcome_message",
+      "name": "신규 플레이어 환영",
+      "enabled": true,
+      "condition": {
+        "type": "on_connect"
+      },
+      "actions": [
+        {
+          "type": "send_message",
+          "target": "player",
+          "text": "엘도리아 마을에 오신 것을 환영합니다! '도움말'을 입력하면 명령어 목록을 볼 수 있습니다. 마을을 탐험하고, 몬스터와 싸우고, 보물을 발견하세요!"
+        },
+        {
+          "type": "give_item",
+          "content_id": "치유_물약"
+        }
+      ]
+    }
+  ]
+}

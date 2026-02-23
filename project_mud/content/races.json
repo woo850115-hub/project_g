@@ -1,0 +1,38 @@
+[
+  {
+    "id": "인간",
+    "name": "인간",
+    "description": "균형 잡힌 능력치를 가진 종족입니다.",
+    "hp_bonus": 0,
+    "attack_bonus": 0,
+    "defense_bonus": 0,
+    "racial_skill": null
+  },
+  {
+    "id": "엘프",
+    "name": "엘프",
+    "description": "민첩하고 마법에 뛰어난 종족입니다.",
+    "hp_bonus": -10,
+    "attack_bonus": 2,
+    "defense_bonus": 0,
+    "racial_skill": "자연 치유"
+  },
+  {
+    "id": "드워프",
+    "name": "드워프",
+    "description": "강인하고 튼튼한 종족입니다.",
+    "hp_bonus": 20,
+    "attack_bonus": 0,
+    "defense_bonus": 3,
+    "racial_skill": null
+  },
+  {
+    "id": "오크",
+    "name": "오크",
+    "description": "강력한 힘을 가진 전투 종족입니다.",
+    "hp_bonus": 10,
+    "attack_bonus": 2,
+    "defense_bonus": -1,
+    "racial_skill": "분쇄"
+  }
+]

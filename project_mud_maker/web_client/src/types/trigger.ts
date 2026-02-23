@@ -11,7 +11,8 @@ export type TriggerAction =
   | { type: 'teleport'; room_id: string }
   | { type: 'set_component'; target: string; component: string; value: unknown }
   | { type: 'despawn_trigger_entity' }
-  | { type: 'give_item'; content_id: string };
+  | { type: 'give_item'; content_id: string }
+  | { type: 'heal'; target: string; mode: string; amount: number };
 
 export interface Trigger {
   id: string;

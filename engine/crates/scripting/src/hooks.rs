@@ -22,6 +22,10 @@ pub struct HookRegistry {
     pub on_connect: Vec<RegistryKey>,
     /// on_admin callbacks — keyed by command name, with min permission
     pub on_admin: HashMap<String, Vec<AdminHookEntry>>,
+    /// on_input callbacks — called with (session_id, line) for Login-state input
+    pub on_input: Vec<RegistryKey>,
+    /// on_disconnect callbacks — called with (session_id)
+    pub on_disconnect: Vec<RegistryKey>,
 }
 
 impl HookRegistry {
@@ -33,6 +37,8 @@ impl HookRegistry {
             on_enter_room: Vec::new(),
             on_connect: Vec::new(),
             on_admin: HashMap::new(),
+            on_input: Vec::new(),
+            on_disconnect: Vec::new(),
         }
     }
 
@@ -43,6 +49,8 @@ impl HookRegistry {
         self.on_enter_room.clear();
         self.on_connect.clear();
         self.on_admin.clear();
+        self.on_input.clear();
+        self.on_disconnect.clear();
     }
 
     pub fn on_init_count(&self) -> usize {
@@ -67,6 +75,14 @@ impl HookRegistry {
 
     pub fn on_admin_count(&self) -> usize {
         self.on_admin.values().map(|v| v.len()).sum()
+    }
+
+    pub fn on_input_count(&self) -> usize {
+        self.on_input.len()
+    }
+
+    pub fn on_disconnect_count(&self) -> usize {
+        self.on_disconnect.len()
     }
 }
 
@@ -147,6 +163,28 @@ pub fn register_hooks_api(lua: &Lua) -> LuaResult<()> {
         Ok(())
     })?;
     hooks_table.set("on_admin", on_admin_fn)?;
+
+    // hooks.on_input(fn)
+    let on_input_fn = lua.create_function(|lua, func: Function| {
+        let key = lua.create_registry_value(func)?;
+        lua.app_data_mut::<HookRegistry>()
+            .expect("HookRegistry not set")
+            .on_input
+            .push(key);
+        Ok(())
+    })?;
+    hooks_table.set("on_input", on_input_fn)?;
+
+    // hooks.on_disconnect(fn)
+    let on_disconnect_fn = lua.create_function(|lua, func: Function| {
+        let key = lua.create_registry_value(func)?;
+        lua.app_data_mut::<HookRegistry>()
+            .expect("HookRegistry not set")
+            .on_disconnect
+            .push(key);
+        Ok(())
+    })?;
+    hooks_table.set("on_disconnect", on_disconnect_fn)?;
 
     // hooks.fire_enter_room(entity_id, room_id, old_room_id_or_nil)
     // Allows Lua scripts to trigger on_enter_room hooks (e.g., after movement).

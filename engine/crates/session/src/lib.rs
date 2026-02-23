@@ -66,19 +66,7 @@ impl Default for PermissionLevel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionState {
-    AwaitingLogin,
-    AwaitingPassword {
-        username: String,
-        is_new: bool,
-    },
-    AwaitingPasswordConfirm {
-        username: String,
-        password: String,
-    },
-    SelectingCharacter {
-        account_id: i64,
-        permission: PermissionLevel,
-    },
+    Login,
     Playing,
     Disconnected,
 }
@@ -98,7 +86,7 @@ impl PlayerSession {
     pub fn new(session_id: SessionId) -> Self {
         Self {
             session_id,
-            state: SessionState::AwaitingLogin,
+            state: SessionState::Login,
             entity: None,
             player_name: None,
             account_id: None,
@@ -281,9 +269,9 @@ mod tests {
         let mut mgr = SessionManager::new();
         let sid = mgr.create_session();
 
-        // Initially awaiting login
+        // Initially in Login state
         let session = mgr.get_session(sid).unwrap();
-        assert_eq!(session.state, SessionState::AwaitingLogin);
+        assert_eq!(session.state, SessionState::Login);
         assert!(session.entity.is_none());
 
         // Bind entity
@@ -339,21 +327,6 @@ mod tests {
 
         mgr.disconnect(s1);
         assert_eq!(mgr.active_count(), 1);
-    }
-
-    #[test]
-    fn session_state_new_variants() {
-        let state = SessionState::AwaitingPassword {
-            username: "test".into(),
-            is_new: true,
-        };
-        assert!(matches!(state, SessionState::AwaitingPassword { is_new: true, .. }));
-
-        let state = SessionState::SelectingCharacter {
-            account_id: 42,
-            permission: PermissionLevel::Admin,
-        };
-        assert!(matches!(state, SessionState::SelectingCharacter { account_id: 42, .. }));
     }
 
     #[test]

@@ -1,3 +1,4 @@
+mod auth_adapter;
 mod config;
 mod shutdown;
 
@@ -21,6 +22,7 @@ use session::{SessionId, SessionManager, SessionOutput, SessionState};
 use space::RoomGraphSpace;
 use space::SpaceModel;
 
+use crate::auth_adapter::PlayerDbAuthProvider;
 use crate::config::{parse_cli_args, ServerConfig};
 use crate::shutdown::{shutdown_channel, ShutdownRx};
 
@@ -197,7 +199,7 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
         let mut script_ctx = ScriptContext {
             ecs: &mut tick_loop.ecs,
             space: &mut tick_loop.space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: tick_loop.current_tick,
         };
         match script_engine.run_on_init(&mut script_ctx) {
@@ -211,20 +213,6 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
             }
         }
     }
-
-    // Find spawn room by name (supports both Korean and legacy English)
-    let spawn_room = tick_loop
-        .ecs
-        .entities_with::<Name>()
-        .into_iter()
-        .find(|&eid| {
-            tick_loop
-                .ecs
-                .get_component::<Name>(eid)
-                .map(|n| n.0 == "시작의 방" || n.0 == "Starting Room")
-                .unwrap_or(false)
-        })
-        .expect("시작의 방 not found — ensure scripts/01_world_setup.lua exists");
 
     let tick_duration = Duration::from_millis(1000 / tick_loop.config.tps as u64);
     let snapshot_interval = config.persistence.snapshot_interval;
@@ -272,6 +260,9 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
 
         let tick_start = std::time::Instant::now();
 
+        // Build auth provider for this tick (if auth is enabled)
+        let auth_provider = player_db.as_ref().map(|db| PlayerDbAuthProvider::new(db));
+
         // 1. Process network messages
         let mut inputs = Vec::new();
         while let Ok(msg) = player_rx.try_recv() {
@@ -285,12 +276,21 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
                         session_id,
                         &script_engine,
                         tick_loop.current_tick,
+                        auth_provider.as_ref().map(|p| p as &dyn scripting::AuthProvider),
                     );
                 }
                 NetToTick::PlayerInput { session_id, line } => {
-                    if let Some(input) =
-                        handle_player_input(&mut sessions, &output_tx, session_id, &line, spawn_room, &mut tick_loop.ecs, &mut tick_loop.space, player_db.as_ref(), tick_loop.current_tick)
-                    {
+                    if let Some(input) = handle_player_input(
+                        &mut tick_loop.ecs,
+                        &mut tick_loop.space,
+                        &mut sessions,
+                        &output_tx,
+                        session_id,
+                        &line,
+                        &script_engine,
+                        tick_loop.current_tick,
+                        auth_provider.as_ref().map(|p| p as &dyn scripting::AuthProvider),
+                    ) {
                         inputs.push(input);
                     }
                 }
@@ -299,9 +299,11 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
                         &mut tick_loop.ecs,
                         &mut tick_loop.space,
                         &mut sessions,
+                        &output_tx,
                         session_id,
-                        player_db.as_ref(),
+                        &script_engine,
                         tick_loop.current_tick,
+                        auth_provider.as_ref().map(|p| p as &dyn scripting::AuthProvider),
                     );
                 }
             }
@@ -325,7 +327,7 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
         let mut ctx = GameContext {
             ecs: &mut tick_loop.ecs,
             space: &mut tick_loop.space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: tick_loop.current_tick,
         };
         let action_outputs = mud::systems::run_game_systems(&mut ctx, normal_inputs, Some(&script_engine));
@@ -349,7 +351,7 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
             let mut script_ctx = ScriptContext {
                 ecs: &mut tick_loop.ecs,
                 space: &mut tick_loop.space,
-                sessions: &sessions,
+                sessions: &mut sessions,
                 tick: tick_loop.current_tick,
             };
             match script_engine.run_on_admin(&mut script_ctx, &admin_info) {
@@ -386,7 +388,7 @@ fn run_mud_tick_thread(mut player_rx: PlayerRx, output_tx: OutputTx, config: Ser
             let mut script_ctx = ScriptContext {
                 ecs: &mut tick_loop.ecs,
                 space: &mut tick_loop.space,
-                sessions: &sessions,
+                sessions: &mut sessions,
                 tick: tick_loop.current_tick,
             };
             match script_engine.run_on_tick(&mut script_ctx) {
@@ -450,14 +452,11 @@ fn handle_new_connection(
     session_id: SessionId,
     script_engine: &ScriptEngine,
     tick: u64,
+    auth: Option<&dyn scripting::AuthProvider>,
 ) {
     sessions.create_session_with_id(session_id);
-    let _ = output_tx.send(SessionOutput::new(
-        session_id,
-        "Rust MUD에 오신 것을 환영합니다!\n이름을 입력하세요:",
-    ));
 
-    // Fire on_connect hooks
+    // Fire on_connect hooks (Lua sends welcome message)
     let mut script_ctx = ScriptContext {
         ecs,
         space,
@@ -474,166 +473,60 @@ fn handle_new_connection(
             tracing::warn!("Lua on_connect error: {}", e);
         }
     }
+
+    // If on_connect didn't send anything (no hooks registered), send a default
+    // This is only for backwards compatibility when no login script exists
+    let _ = auth; // auth not needed here; on_connect doesn't require it
 }
 
 fn handle_player_input(
+    ecs: &mut EcsAdapter,
+    space: &mut RoomGraphSpace,
     sessions: &mut SessionManager,
     output_tx: &OutputTx,
     session_id: SessionId,
     line: &str,
-    spawn_room: ecs_adapter::EntityId,
-    ecs: &mut EcsAdapter,
-    space: &mut RoomGraphSpace,
-    player_db: Option<&PlayerDb>,
+    script_engine: &ScriptEngine,
     current_tick: u64,
+    auth: Option<&dyn scripting::AuthProvider>,
 ) -> Option<PlayerInput> {
     let session = sessions.get_session(session_id)?;
     let state = session.state.clone();
 
     match state {
-        SessionState::AwaitingLogin => {
-            let name = line.trim().to_string();
-            if name.is_empty() {
-                let _ = output_tx.send(SessionOutput::new(session_id, "이름을 입력하세요:"));
-                return None;
-            }
-
-            if let Some(db) = player_db {
-                // Auth mode: check if account exists
-                let exists = db.account().get_by_username(&name).ok().flatten().is_some();
-                if let Some(s) = sessions.get_session_mut(session_id) {
-                    s.state = SessionState::AwaitingPassword {
-                        username: name.clone(),
-                        is_new: !exists,
-                    };
-                }
-                if exists {
-                    let _ = output_tx.send(SessionOutput::new(session_id, "비밀번호를 입력하세요:"));
-                } else {
-                    let _ = output_tx.send(SessionOutput::new(
-                        session_id,
-                        format!("'{}' — 새 계정입니다. 비밀번호를 설정하세요:", name),
-                    ));
-                }
-                return None;
-            }
-
-            // Quick-play mode: create entity immediately
-            spawn_player_entity(ecs, space, sessions, output_tx, session_id, &name, spawn_room)
-        }
-        SessionState::AwaitingPassword { ref username, is_new } => {
-            let password = line.trim().to_string();
-            if password.is_empty() {
-                let _ = output_tx.send(SessionOutput::new(session_id, "비밀번호를 입력하세요:"));
-                return None;
-            }
-
-            let db = player_db?;
-
-            if is_new {
-                // New account: confirm password
-                if let Some(s) = sessions.get_session_mut(session_id) {
-                    s.state = SessionState::AwaitingPasswordConfirm {
-                        username: username.clone(),
-                        password,
-                    };
-                }
-                let _ = output_tx.send(SessionOutput::new(session_id, "비밀번호를 다시 입력하세요:"));
-                return None;
-            }
-
-            // Existing account: authenticate
-            match db.account().authenticate(username, &password) {
-                Ok(account) => {
-                    enter_character_selection(sessions, output_tx, session_id, &account, db);
-                }
-                Err(player_db::PlayerDbError::InvalidPassword) => {
-                    let _ = output_tx.send(SessionOutput::new(session_id, "비밀번호가 틀렸습니다. 비밀번호를 입력하세요:"));
+        SessionState::Login => {
+            // Delegate all login logic to Lua via on_input hooks
+            let mut script_ctx = ScriptContext {
+                ecs,
+                space,
+                sessions,
+                tick: current_tick,
+            };
+            match script_engine.run_on_input(&mut script_ctx, session_id, line, auth) {
+                Ok(input_outputs) => {
+                    for out in input_outputs {
+                        let _ = output_tx.send(out);
+                    }
                 }
                 Err(e) => {
-                    tracing::warn!("Auth error: {}", e);
-                    let _ = output_tx.send(SessionOutput::new(session_id, "인증 오류가 발생했습니다. 이름을 입력하세요:"));
-                    if let Some(s) = sessions.get_session_mut(session_id) {
-                        s.state = SessionState::AwaitingLogin;
-                    }
+                    tracing::warn!("Lua on_input error: {}", e);
                 }
             }
-            None
-        }
-        SessionState::AwaitingPasswordConfirm { ref username, ref password } => {
-            let confirm = line.trim().to_string();
-            if confirm != *password {
-                let _ = output_tx.send(SessionOutput::new(session_id, "비밀번호가 일치하지 않습니다. 이름을 입력하세요:"));
-                if let Some(s) = sessions.get_session_mut(session_id) {
-                    s.state = SessionState::AwaitingLogin;
-                }
-                return None;
-            }
 
-            let db = player_db?;
-            let username = username.clone();
-            let password = password.clone();
-
-            match db.account().create(&username, &password) {
-                Ok(account) => {
-                    let _ = output_tx.send(SessionOutput::new(session_id, "계정이 생성되었습니다!"));
-                    enter_character_selection(sessions, output_tx, session_id, &account, db);
-                }
-                Err(e) => {
-                    tracing::warn!("Account creation error: {}", e);
-                    let _ = output_tx.send(SessionOutput::new(session_id, "계정 생성에 실패했습니다. 이름을 입력하세요:"));
-                    if let Some(s) = sessions.get_session_mut(session_id) {
-                        s.state = SessionState::AwaitingLogin;
-                    }
-                }
-            }
-            None
-        }
-        SessionState::SelectingCharacter { account_id, permission } => {
-            let choice = line.trim();
-            let db = player_db?;
-
-            let chars = db.character().list_for_account(account_id).ok()?;
-            let new_index = chars.len() + 1;
-
-            if choice == new_index.to_string() || choice.eq_ignore_ascii_case("new") {
-                // Create new character — use username as default name
-                let session = sessions.get_session(session_id)?;
-                let default_name = session.player_name.clone().unwrap_or_else(|| "모험자".to_string());
-                let defaults = serde_json::json!({
-                    "Health": {"current": 100, "max": 100},
-                    "Attack": 10,
-                    "Defense": 3
-                });
-                match db.character().create(account_id, &default_name, &defaults) {
-                    Ok(character) => {
-                        return spawn_character_from_db(
-                            ecs, space, sessions, output_tx, session_id,
-                            &character, spawn_room, permission,
-                        );
-                    }
-                    Err(e) => {
-                        let _ = output_tx.send(SessionOutput::new(
+            // Check if Lua transitioned the session to Playing
+            if let Some(session) = sessions.get_session(session_id) {
+                if session.state == SessionState::Playing {
+                    if let Some(entity) = session.entity {
+                        // Auto-look after login
+                        return Some(PlayerInput {
                             session_id,
-                            format!("캐릭터 생성 실패: {}. 다시 선택하세요:", e),
-                        ));
+                            entity,
+                            action: PlayerAction::Look,
+                        });
                     }
                 }
-                return None;
             }
 
-            // Parse numeric choice
-            if let Ok(num) = choice.parse::<usize>() {
-                if num >= 1 && num <= chars.len() {
-                    let character = &chars[num - 1];
-                    return spawn_character_from_db(
-                        ecs, space, sessions, output_tx, session_id,
-                        character, spawn_room, permission,
-                    );
-                }
-            }
-
-            let _ = output_tx.send(SessionOutput::new(session_id, "잘못된 선택입니다. 번호를 입력하세요:"));
             None
         }
         SessionState::Playing => {
@@ -642,7 +535,7 @@ fn handle_player_input(
 
             if action == PlayerAction::Quit {
                 let _ = output_tx.send(SessionOutput::with_disconnect(session_id, "안녕히 가세요!"));
-                handle_disconnect(ecs, space, sessions, session_id, player_db, current_tick);
+                handle_disconnect(ecs, space, sessions, output_tx, session_id, script_engine, current_tick, auth);
                 return None;
             }
 
@@ -656,210 +549,43 @@ fn handle_player_input(
     }
 }
 
-fn enter_character_selection(
-    sessions: &mut SessionManager,
-    output_tx: &OutputTx,
-    session_id: SessionId,
-    account: &player_db::Account,
-    db: &PlayerDb,
-) {
-    if let Some(s) = sessions.get_session_mut(session_id) {
-        s.account_id = Some(account.id);
-        s.player_name = Some(account.username.clone());
-        s.permission = session::PermissionLevel::from_i32(account.permission.as_i32());
-        s.state = SessionState::SelectingCharacter {
-            account_id: account.id,
-            permission: session::PermissionLevel::from_i32(account.permission.as_i32()),
-        };
-    }
-
-    let chars = db
-        .character()
-        .list_for_account(account.id)
-        .unwrap_or_default();
-
-    let mut msg = String::from("캐릭터를 선택하세요:\n");
-    for (i, c) in chars.iter().enumerate() {
-        msg.push_str(&format!("  {}. {}\n", i + 1, c.name));
-    }
-    msg.push_str(&format!("  {}. [새 캐릭터]\n선택:", chars.len() + 1));
-
-    let _ = output_tx.send(SessionOutput::new(session_id, msg));
-}
-
-fn spawn_character_from_db(
-    ecs: &mut EcsAdapter,
-    space: &mut RoomGraphSpace,
-    sessions: &mut SessionManager,
-    output_tx: &OutputTx,
-    session_id: SessionId,
-    character: &player_db::CharacterRecord,
-    spawn_room: ecs_adapter::EntityId,
-    permission: session::PermissionLevel,
-) -> Option<PlayerInput> {
-    // Check for lingering entity (seamless reconnection)
-    if let Some(entity) = sessions.rebind_lingering(session_id, character.id) {
-        if let Some(s) = sessions.get_session_mut(session_id) {
-            s.player_name = Some(character.name.clone());
-            s.permission = permission;
-        }
-        let _ = output_tx.send(SessionOutput::new(
-            session_id,
-            format!(
-                "재접속 완료! 환영합니다, {}님!",
-                character.name
-            ),
-        ));
-        tracing::info!(character_id = character.id, ?entity, "Player reconnected to lingering entity");
-        return Some(PlayerInput {
-            session_id,
-            entity,
-            action: PlayerAction::Look,
-        });
-    }
-
-    // No lingering entity — spawn fresh from DB
-    let entity = ecs.spawn_entity();
-
-    // Set name
-    ecs.set_component(entity, Name(character.name.clone())).unwrap();
-    ecs.set_component(entity, PlayerTag).unwrap();
-
-    // Restore components from DB JSON
-    if let Some(hp) = character.components.get("Health") {
-        if let (Some(current), Some(max)) = (hp.get("current"), hp.get("max")) {
-            ecs.set_component(
-                entity,
-                Health {
-                    current: current.as_i64().unwrap_or(100) as i32,
-                    max: max.as_i64().unwrap_or(100) as i32,
-                },
-            )
-            .unwrap();
-        }
-    } else {
-        ecs.set_component(entity, Health { current: 100, max: 100 }).unwrap();
-    }
-
-    if let Some(atk) = character.components.get("Attack") {
-        ecs.set_component(entity, Attack(atk.as_i64().unwrap_or(10) as i32)).unwrap();
-    } else {
-        ecs.set_component(entity, Attack(10)).unwrap();
-    }
-
-    if let Some(def) = character.components.get("Defense") {
-        ecs.set_component(entity, Defense(def.as_i64().unwrap_or(3) as i32)).unwrap();
-    } else {
-        ecs.set_component(entity, Defense(3)).unwrap();
-    }
-
-    ecs.set_component(entity, Inventory::new()).unwrap();
-
-    // Place in room (restore from DB or use spawn room)
-    let target_room = character
-        .room_id
-        .map(ecs_adapter::EntityId::from_u64)
-        .filter(|&rid| space.room_exists(rid))
-        .unwrap_or(spawn_room);
-    space.place_entity(entity, target_room).unwrap();
-
-    sessions.bind_entity(session_id, entity);
-    if let Some(s) = sessions.get_session_mut(session_id) {
-        s.player_name = Some(character.name.clone());
-        s.character_id = Some(character.id);
-        s.permission = permission;
-    }
-
-    let _ = output_tx.send(SessionOutput::new(
-        session_id,
-        format!(
-            "환영합니다, {}님!\n'도움말'을 입력하면 명령어를 볼 수 있습니다.",
-            character.name
-        ),
-    ));
-
-    Some(PlayerInput {
-        session_id,
-        entity,
-        action: PlayerAction::Look,
-    })
-}
-
-fn spawn_player_entity(
-    ecs: &mut EcsAdapter,
-    space: &mut RoomGraphSpace,
-    sessions: &mut SessionManager,
-    output_tx: &OutputTx,
-    session_id: SessionId,
-    name: &str,
-    spawn_room: ecs_adapter::EntityId,
-) -> Option<PlayerInput> {
-    let entity = ecs.spawn_entity();
-    ecs.set_component(entity, Name(name.to_string())).unwrap();
-    ecs.set_component(entity, PlayerTag).unwrap();
-    ecs.set_component(entity, Health { current: 100, max: 100 }).unwrap();
-    ecs.set_component(entity, Attack(10)).unwrap();
-    ecs.set_component(entity, Defense(3)).unwrap();
-    ecs.set_component(entity, Inventory::new()).unwrap();
-    space.place_entity(entity, spawn_room).unwrap();
-
-    sessions.bind_entity(session_id, entity);
-    if let Some(s) = sessions.get_session_mut(session_id) {
-        s.player_name = Some(name.to_string());
-    }
-
-    let _ = output_tx.send(SessionOutput::new(
-        session_id,
-        format!("환영합니다, {}님!\n'도움말'을 입력하면 명령어를 볼 수 있습니다.", name),
-    ));
-
-    Some(PlayerInput {
-        session_id,
-        entity,
-        action: PlayerAction::Look,
-    })
-}
-
 fn handle_disconnect(
     ecs: &mut EcsAdapter,
     space: &mut RoomGraphSpace,
     sessions: &mut SessionManager,
+    output_tx: &OutputTx,
     session_id: SessionId,
-    player_db: Option<&PlayerDb>,
+    script_engine: &ScriptEngine,
     current_tick: u64,
+    auth: Option<&dyn scripting::AuthProvider>,
 ) {
-    // Save character state before disconnect
-    if let Some(session) = sessions.get_session(session_id) {
-        if let (Some(entity), Some(character_id), Some(account_id)) =
-            (session.entity, session.character_id, session.account_id)
-        {
-            // Save to DB
-            if let Some(db) = player_db {
-                save_character_state(ecs, space, entity, character_id, db);
+    // Fire on_disconnect hooks (Lua handles save/linger/despawn)
+    let mut script_ctx = ScriptContext {
+        ecs,
+        space,
+        sessions,
+        tick: current_tick,
+    };
+    match script_engine.run_on_disconnect(&mut script_ctx, session_id, auth) {
+        Ok(disconnect_outputs) => {
+            for out in disconnect_outputs {
+                let _ = output_tx.send(out);
             }
-
-            // Auth mode: linger instead of immediate despawn
-            if player_db.is_some() {
-                sessions.disconnect(session_id);
-                sessions.add_lingering(session::LingeringEntity {
-                    entity,
-                    character_id,
-                    account_id,
-                    disconnect_tick: current_tick,
-                });
-                sessions.remove_session(session_id);
-                tracing::info!(character_id, ?entity, "Player disconnected, entity lingering");
-                return;
-            }
+        }
+        Err(e) => {
+            tracing::warn!("Lua on_disconnect error: {}", e);
         }
     }
 
-    // Quick-play mode: immediate despawn
-    if let Some(entity) = sessions.disconnect(session_id) {
-        let _ = space.remove_entity(entity);
-        let _ = ecs.despawn_entity(entity);
+    // Fallback cleanup: if Lua didn't handle everything, clean up here.
+    // This ensures resources are freed even if there's no on_disconnect hook.
+    if sessions.get_session(session_id).is_some() {
+        if let Some(entity) = sessions.disconnect(session_id) {
+            let _ = space.remove_entity(entity);
+            let _ = ecs.despawn_entity(entity);
+        }
+        sessions.remove_session(session_id);
     }
-    sessions.remove_session(session_id);
 }
 
 /// Save a single character's ECS state to the database.
@@ -883,6 +609,24 @@ fn save_character_state(
     }
     if let Ok(defense) = ecs.get_component::<Defense>(entity) {
         components.insert("Defense".to_string(), serde_json::json!(defense.0));
+    }
+    if let Ok(race) = ecs.get_component::<Race>(entity) {
+        components.insert("Race".to_string(), serde_json::json!(race.0));
+    }
+    if let Ok(class) = ecs.get_component::<Class>(entity) {
+        components.insert("Class".to_string(), serde_json::json!(class.0));
+    }
+    if let Ok(level) = ecs.get_component::<Level>(entity) {
+        components.insert(
+            "Level".to_string(),
+            serde_json::json!({"level": level.level, "exp": level.exp, "exp_next": level.exp_next}),
+        );
+    }
+    if let Ok(skills) = ecs.get_component::<Skills>(entity) {
+        components.insert(
+            "Skills".to_string(),
+            serde_json::json!({"learned": skills.learned}),
+        );
     }
 
     let room_id = space.entity_room(entity).map(|r| r.to_u64());

@@ -45,6 +45,10 @@ pub enum PlayerAction {
     Quit,
     Help,
     Admin { command: String, args: String },
+    Status,
+    Gold,
+    SkillList,
+    UseSkill(String),
     Unknown(String),
 }
 
@@ -133,6 +137,18 @@ pub fn parse_input(input: &str) -> PlayerAction {
         "quit" | "exit" | "종료" => PlayerAction::Quit,
         // help  (ㄷ)
         "help" | "?" | "도움말" | "\u{3137}" => PlayerAction::Help,
+        // status
+        "status" | "stat" | "상태" => PlayerAction::Status,
+        // gold  (ㄱㄷ)
+        "gold" | "골드" | "\u{3131}\u{3137}" => PlayerAction::Gold,
+        // skill
+        "skill" | "스킬" => {
+            if arg.is_empty() {
+                PlayerAction::SkillList
+            } else {
+                PlayerAction::UseSkill(arg)
+            }
+        }
         _ => PlayerAction::Unknown(trimmed.to_string()),
     }
 }
@@ -291,6 +307,32 @@ mod tests {
             }
         );
         assert_eq!(parse_input("/"), PlayerAction::Unknown("/".to_string()));
+    }
+
+    #[test]
+    fn parse_status() {
+        assert_eq!(parse_input("상태"), PlayerAction::Status);
+        assert_eq!(parse_input("status"), PlayerAction::Status);
+        assert_eq!(parse_input("stat"), PlayerAction::Status);
+    }
+
+    #[test]
+    fn parse_gold() {
+        assert_eq!(parse_input("골드"), PlayerAction::Gold);
+        assert_eq!(parse_input("gold"), PlayerAction::Gold);
+        assert_eq!(parse_input("\u{3131}\u{3137}"), PlayerAction::Gold);
+    }
+
+    #[test]
+    fn parse_skill_list() {
+        assert_eq!(parse_input("스킬"), PlayerAction::SkillList);
+        assert_eq!(parse_input("skill"), PlayerAction::SkillList);
+    }
+
+    #[test]
+    fn parse_use_skill() {
+        assert_eq!(parse_input("강타 스킬"), PlayerAction::UseSkill("강타".to_string()));
+        assert_eq!(parse_input("fireball skill"), PlayerAction::UseSkill("fireball".to_string()));
     }
 
     #[test]

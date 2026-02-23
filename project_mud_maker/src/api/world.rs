@@ -21,8 +21,22 @@ pub fn router() -> Router<AppState> {
 
 // --- Data model ---
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Zone {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_zone_color")]
+    pub color: String,
+}
+
+fn default_zone_color() -> String {
+    "#3b82f6".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorldData {
+    #[serde(default)]
+    pub zones: Vec<Zone>,
     pub rooms: Vec<Room>,
 }
 
@@ -38,6 +52,8 @@ pub struct Room {
     pub exits: BTreeMap<String, String>,
     #[serde(default)]
     pub entities: Vec<PlacedEntity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zone_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -291,23 +307,41 @@ fn generate_world_lua(world: &WorldData, state: &AppState) -> String {
         return lua;
     }
 
-    // Create room entities
-    lua.push_str("    -- Rooms\n");
+    // Group rooms by zone for organized output
+    let zone_map: BTreeMap<&str, &Zone> = world.zones.iter().map(|z| (z.id.as_str(), z)).collect();
+    let mut rooms_by_zone: BTreeMap<Option<&str>, Vec<&Room>> = BTreeMap::new();
     for room in &world.rooms {
-        let var = sanitize_var(&room.id);
-        lua.push_str(&format!("    local {var} = ecs:spawn()\n"));
-        lua.push_str(&format!(
-            "    ecs:set({var}, \"Name\", \"{}\")\n",
-            escape_lua(&room.name)
-        ));
-        if !room.description.is_empty() {
-            lua.push_str(&format!(
-                "    ecs:set({var}, \"Description\", \"{}\")\n",
-                escape_lua(&room.description)
-            ));
-        }
+        let key = room.zone_id.as_deref();
+        rooms_by_zone.entry(key).or_default().push(room);
     }
-    lua.push('\n');
+
+    // Create room entities (grouped by zone)
+    for (zone_id, zone_rooms) in &rooms_by_zone {
+        match zone_id {
+            Some(zid) => {
+                let zone_name = zone_map.get(zid).map(|z| z.name.as_str()).unwrap_or(zid);
+                lua.push_str(&format!("    -- === Zone: {} ===\n", zone_name));
+            }
+            None => {
+                lua.push_str("    -- === Zone: unassigned ===\n");
+            }
+        }
+        for room in zone_rooms {
+            let var = sanitize_var(&room.id);
+            lua.push_str(&format!("    local {var} = ecs:spawn()\n"));
+            lua.push_str(&format!(
+                "    ecs:set({var}, \"Name\", \"{}\")\n",
+                escape_lua(&room.name)
+            ));
+            if !room.description.is_empty() {
+                lua.push_str(&format!(
+                    "    ecs:set({var}, \"Description\", \"{}\")\n",
+                    escape_lua(&room.description)
+                ));
+            }
+        }
+        lua.push('\n');
+    }
 
     // Register rooms with exits
     lua.push_str("    -- Exits\n");

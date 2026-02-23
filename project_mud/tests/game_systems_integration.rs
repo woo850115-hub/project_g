@@ -10,27 +10,40 @@ use mud::script_setup::register_mud_script_components;
 use mud::session::SessionManager;
 use mud::systems::{GameContext, PlayerInput};
 use scripting::engine::{ScriptContext, ScriptEngine};
-use scripting::ScriptConfig;
+use scripting::{ContentRegistry, ScriptConfig};
 use space::{RoomGraphSpace, SpaceModel};
 
 fn scripts_dir() -> &'static Path {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts"))
 }
 
+fn content_dir() -> &'static Path {
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/content"))
+}
+
 fn setup() -> (EcsAdapter, RoomGraphSpace, SessionManager, ScriptEngine) {
     let mut ecs = EcsAdapter::new();
     let mut space = RoomGraphSpace::new();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut engine = ScriptEngine::new(ScriptConfig::default()).unwrap();
     register_mud_script_components(engine.component_registry_mut());
+
+    // Load content before scripts (so Lua scripts can access content.*)
+    let cdir = content_dir();
+    if cdir.is_dir() {
+        if let Ok(registry) = ContentRegistry::load_dir(cdir) {
+            let _ = engine.register_content(&registry);
+        }
+    }
+
     engine.load_directory(scripts_dir()).unwrap();
 
     // Run on_init to create the world
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     engine.run_on_init(&mut ctx).unwrap();
@@ -68,6 +81,8 @@ fn spawn_player(
     ecs.set_component(entity, Attack(10)).unwrap();
     ecs.set_component(entity, Defense(3)).unwrap();
     ecs.set_component(entity, Inventory::new()).unwrap();
+    ecs.set_component(entity, Level { level: 1, exp: 0, exp_next: 100 }).unwrap();
+    ecs.set_component(entity, Skills { learned: vec!["강타".to_string()] }).unwrap();
     space.place_entity(entity, room).unwrap();
     sessions.bind_entity(sid, entity);
     if let Some(s) = sessions.get_session_mut(sid) {
@@ -90,7 +105,7 @@ fn look_shows_room_description() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -115,7 +130,7 @@ fn move_east_to_market_square() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -146,7 +161,7 @@ fn move_to_invalid_direction_fails() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -174,7 +189,7 @@ fn full_combat_flow() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 1,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -188,7 +203,7 @@ fn full_combat_flow() {
         let mut script_ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
         let tick_outputs = engine.run_on_tick(&mut script_ctx).unwrap();
@@ -216,7 +231,7 @@ fn full_combat_flow() {
             let mut ctx = GameContext {
                 ecs: &mut ecs,
                 space: &mut space,
-                sessions: &sessions,
+                sessions: &mut sessions,
                 tick: tick as u64,
             };
             mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -226,7 +241,7 @@ fn full_combat_flow() {
         let mut script_ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: tick as u64,
         };
         engine.run_on_tick(&mut script_ctx).unwrap();
@@ -252,7 +267,7 @@ fn inventory_get_and_drop() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -276,7 +291,7 @@ fn inventory_get_and_drop() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 1,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -291,7 +306,7 @@ fn inventory_get_and_drop() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 2,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -321,7 +336,7 @@ fn who_command_shows_players() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -348,7 +363,7 @@ fn say_broadcasts_to_room() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -377,7 +392,7 @@ fn help_command() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -402,7 +417,7 @@ fn move_broadcasts_to_others() {
     let mut ctx = GameContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
     let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
@@ -412,4 +427,61 @@ fn move_broadcasts_to_others() {
     assert!(!bob_msgs.is_empty(), "Bob should see departure message");
     assert!(bob_msgs[0].text.contains("Alice") && bob_msgs[0].text.contains("떠났습니다"),
             "Bob departure msg: {}", bob_msgs[0].text);
+}
+
+#[test]
+fn status_command_shows_character_info() {
+    let (mut ecs, mut space, mut sessions, engine) = setup();
+    let room = spawn_room(&ecs);
+    let (sid, entity) = spawn_player(&mut ecs, &mut space, &mut sessions, "Hero", room);
+
+    // Set Race and Class for the test
+    ecs.set_component(entity, Race("엘프".to_string())).unwrap();
+    ecs.set_component(entity, Class("마법사".to_string())).unwrap();
+
+    let inputs = vec![PlayerInput {
+        session_id: sid,
+        entity,
+        action: PlayerAction::Status,
+    }];
+    let mut ctx = GameContext {
+        ecs: &mut ecs,
+        space: &mut space,
+        sessions: &mut sessions,
+        tick: 0,
+    };
+    let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
+
+    assert!(!outputs.is_empty());
+    let text = &outputs[0].text;
+    assert!(text.contains("Hero"), "Should contain name, got: {}", text);
+    assert!(text.contains("엘프"), "Should contain race, got: {}", text);
+    assert!(text.contains("마법사"), "Should contain class, got: {}", text);
+    assert!(text.contains("레벨") || text.contains("1"), "Should show level info, got: {}", text);
+    assert!(text.contains("강타"), "Should show skills, got: {}", text);
+}
+
+#[test]
+fn skill_list_command() {
+    let (mut ecs, mut space, mut sessions, engine) = setup();
+    let room = spawn_room(&ecs);
+    let (sid, entity) = spawn_player(&mut ecs, &mut space, &mut sessions, "Hero", room);
+
+    let inputs = vec![PlayerInput {
+        session_id: sid,
+        entity,
+        action: PlayerAction::SkillList,
+    }];
+    let mut ctx = GameContext {
+        ecs: &mut ecs,
+        space: &mut space,
+        sessions: &mut sessions,
+        tick: 0,
+    };
+    let outputs = mud::systems::run_game_systems(&mut ctx, inputs, Some(&engine));
+
+    assert!(!outputs.is_empty());
+    let text = &outputs[0].text;
+    assert!(text.contains("강타"), "Should list skills, got: {}", text);
+    assert!(text.contains("보유 스킬") || text.contains("사용 가능"), "Should show header, got: {}", text);
 }

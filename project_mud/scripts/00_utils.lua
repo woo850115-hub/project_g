@@ -153,6 +153,127 @@ function format_inventory(eid)
     return table.concat(lines, "\n")
 end
 
+--- Get a monster definition from content registry by id.
+function get_monster_def(id)
+    if content and content.monsters then
+        for _, mon in ipairs(content.monsters) do
+            if mon.id == id then return mon end
+        end
+    end
+    return nil
+end
+
+--- Get an item definition from content registry by id.
+function get_item_def(id)
+    if content and content.items then
+        for _, item in ipairs(content.items) do
+            if item.id == id then return item end
+        end
+    end
+    return nil
+end
+
+--- Calculate gold drop from a dead NPC by checking its content loot_table.
+--- Looks up the NPC's Name in content.monsters, then sums currency item values.
+function calc_gold_drop(dead_entity)
+    if not content or not content.monsters or not content.items then
+        return 0
+    end
+
+    -- Find monster definition by matching Name
+    local name = ecs:get(dead_entity, "Name")
+    if not name then return 0 end
+
+    local monster_def = nil
+    for _, mon in ipairs(content.monsters) do
+        if mon.name == name then
+            monster_def = mon
+            break
+        end
+    end
+
+    if not monster_def or not monster_def.loot_table then
+        return 0
+    end
+
+    -- Sum gold from currency items in loot_table
+    local gold = 0
+    for _, loot_id in ipairs(monster_def.loot_table) do
+        local item_def = get_item_def(loot_id)
+        if item_def and item_def.item_type == "currency" then
+            gold = gold + (item_def.value or 1)
+        end
+    end
+
+    return gold
+end
+
+--- Get a race definition from content registry by id.
+function get_race_def(id)
+    if content and content.races then
+        for _, race in ipairs(content.races) do
+            if race.id == id then return race end
+        end
+    end
+    return nil
+end
+
+--- Get a class definition from content registry by id.
+function get_class_def(id)
+    if content and content.classes then
+        for _, cls in ipairs(content.classes) do
+            if cls.id == id then return cls end
+        end
+    end
+    return nil
+end
+
+--- Get a skill definition from content registry by id.
+function get_skill_def(id)
+    if content and content.skills then
+        for _, skill in ipairs(content.skills) do
+            if skill.id == id then return skill end
+        end
+    end
+    return nil
+end
+
+--- Format a character status display.
+function format_status(eid)
+    local name = get_name(eid)
+    local race = ecs:get(eid, "Race") or "없음"
+    local class = ecs:get(eid, "Class") or "없음"
+    local level_data = ecs:get(eid, "Level")
+    local hp = ecs:get(eid, "Health")
+    local atk = ecs:get(eid, "Attack") or 0
+    local def = ecs:get(eid, "Defense") or 0
+    local skills_data = ecs:get(eid, "Skills")
+
+    local lines = {}
+    table.insert(lines, colors.bold .. colors.cyan .. "=== " .. name .. "의 상태 ===" .. colors.reset)
+    table.insert(lines, "종족: " .. colors.yellow .. race .. colors.reset .. "  직업: " .. colors.yellow .. class .. colors.reset)
+
+    if level_data then
+        table.insert(lines, "레벨: " .. colors.bright_white .. tostring(level_data.level) .. colors.reset .. "  경험치: " .. tostring(level_data.exp) .. "/" .. tostring(level_data.exp_next))
+    end
+
+    if hp then
+        table.insert(lines, "체력: " .. colors.green .. tostring(hp.current) .. "/" .. tostring(hp.max) .. colors.reset)
+    end
+
+    local gold = ecs:get(eid, "Gold") or 0
+    table.insert(lines, "골드: " .. colors.yellow .. tostring(gold) .. colors.reset)
+    table.insert(lines, "공격력: " .. colors.red .. tostring(atk) .. colors.reset .. "  방어력: " .. colors.blue .. tostring(def) .. colors.reset)
+
+    if skills_data and skills_data.learned and #skills_data.learned > 0 then
+        table.insert(lines, "스킬: " .. colors.magenta .. table.concat(skills_data.learned, ", ") .. colors.reset)
+    else
+        table.insert(lines, "스킬: 없음")
+    end
+
+    return table.concat(lines, "\n")
+end
+
 HELP_TEXT = [[사용 가능한 명령어:
   보기 (ㅂ)           - 주변을 둘러봅니다
   북                  - 북쪽으로 이동
@@ -163,6 +284,10 @@ HELP_TEXT = [[사용 가능한 명령어:
   <아이템> 줍기 (ㅈ)  - 아이템을 줍습니다
   <아이템> 버리기 (ㅂㄹ) - 아이템을 버립니다
   가방 (인벤)         - 소지품을 확인합니다
+  골드 (ㄱㄷ)         - 보유 골드를 확인합니다
+  상태                - 캐릭터 상태를 확인합니다
+  스킬                - 보유 스킬 목록을 확인합니다
+  <스킬이름> 스킬     - 스킬을 사용합니다
   <내용> 말 (ㅁ)      - 말을 합니다
   접속자              - 접속 중인 플레이어 목록
   도움말 (ㄷ, ?)      - 이 도움말을 표시합니다

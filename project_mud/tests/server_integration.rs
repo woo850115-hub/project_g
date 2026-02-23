@@ -59,7 +59,7 @@ fn run_test_ticks(
                     let session = sessions.get_session(session_id);
                     if let Some(session) = session {
                         match session.state {
-                            SessionState::AwaitingLogin => {
+                            SessionState::Login => {
                                 let name = line.trim().to_string();
                                 if !name.is_empty() {
                                     let entity = tick_loop.ecs.spawn_entity();
@@ -98,7 +98,6 @@ fn run_test_ticks(
                                 }
                             }
                             SessionState::Disconnected => {}
-                            _ => {} // AwaitingPassword, etc. not used in quick-play tests
                         }
                     }
                 }
@@ -184,7 +183,7 @@ async fn tcp_login_and_move() {
         let mut ctx = ScriptContext {
             ecs: &mut tick_loop.ecs,
             space: &mut tick_loop.space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 0,
         };
         script_engine.run_on_init(&mut ctx).unwrap();

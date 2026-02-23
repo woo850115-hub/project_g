@@ -54,6 +54,27 @@ pub struct CombatTarget(pub ecs_adapter::EntityId);
 #[derive(Component, Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Dead;
 
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Race(pub String);
+
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Class(pub String);
+
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Level {
+    pub level: i32,
+    pub exp: i32,
+    pub exp_next: i32,
+}
+
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Skills {
+    pub learned: Vec<String>,
+}
+
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Gold(pub i64);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,5 +122,45 @@ mod tests {
         let bytes = bincode::serialize(&d).unwrap();
         let decoded: Dead = bincode::deserialize(&bytes).unwrap();
         assert_eq!(d, decoded);
+    }
+
+    #[test]
+    fn race_bincode_roundtrip() {
+        let race = Race("엘프".to_string());
+        let bytes = bincode::serialize(&race).unwrap();
+        let decoded: Race = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(race, decoded);
+    }
+
+    #[test]
+    fn class_bincode_roundtrip() {
+        let class = Class("마법사".to_string());
+        let bytes = bincode::serialize(&class).unwrap();
+        let decoded: Class = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(class, decoded);
+    }
+
+    #[test]
+    fn level_bincode_roundtrip() {
+        let level = Level { level: 5, exp: 230, exp_next: 500 };
+        let bytes = bincode::serialize(&level).unwrap();
+        let decoded: Level = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(level, decoded);
+    }
+
+    #[test]
+    fn gold_bincode_roundtrip() {
+        let gold = Gold(150);
+        let bytes = bincode::serialize(&gold).unwrap();
+        let decoded: Gold = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(gold, decoded);
+    }
+
+    #[test]
+    fn skills_bincode_roundtrip() {
+        let skills = Skills { learned: vec!["강타".to_string(), "화염구".to_string()] };
+        let bytes = bincode::serialize(&skills).unwrap();
+        let decoded: Skills = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(skills, decoded);
     }
 }

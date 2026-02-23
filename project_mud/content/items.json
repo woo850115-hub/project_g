@@ -1,0 +1,81 @@
+[
+  {
+    "attack_bonus": 3,
+    "description": "녹으로 뒤덮인 낡은 검입니다. 없는 것보단 낫습니다.",
+    "id": "녹슨_검",
+    "item_type": "weapon",
+    "name": "녹슨 검",
+    "value": 5
+  },
+  {
+    "attack_bonus": 8,
+    "description": "전투에 적합하게 균형 잡힌 튼튼한 철제 검입니다.",
+    "id": "철_검",
+    "item_type": "weapon",
+    "name": "철 검",
+    "value": 50
+  },
+  {
+    "description": "체력을 회복시켜주는 빨간 액체가 담긴 작은 병입니다.",
+    "heal_amount": 30,
+    "id": "치유_물약",
+    "item_type": "consumable",
+    "name": "치유 물약",
+    "value": 15
+  },
+  {
+    "description": "마법의 기운이 맥동하는 푸른 빛의 수정입니다.",
+    "id": "마나_수정",
+    "item_type": "material",
+    "name": "마나 수정",
+    "value": 100
+  },
+  {
+    "description": "고대의 문양이 새겨진 반짝이는 금화입니다.",
+    "id": "금화",
+    "item_type": "currency",
+    "name": "금화",
+    "value": 1
+  },
+  {
+    "description": "동굴 거미에게서 얻은 강하고 유연한 실입니다.",
+    "id": "거미줄",
+    "item_type": "material",
+    "name": "거미줄",
+    "value": 20
+  },
+  {
+    "description": "오래된 뼈를 갈아 만든 고운 가루입니다. 연금술에 사용됩니다.",
+    "id": "뼛가루",
+    "item_type": "material",
+    "name": "뼛가루",
+    "value": 10
+  },
+  {
+    "description": "뼈로 만든 조잡한 왕관입니다. 고블린 족장의 전리품입니다.",
+    "id": "고블린_왕관",
+    "item_type": "quest",
+    "name": "고블린 왕관",
+    "value": 200
+  },
+  {
+    "defense_bonus": 5,
+    "description": "그림자 마법이 깃든 두건 달린 로브입니다.",
+    "id": "암흑_로브",
+    "item_type": "armor",
+    "name": "암흑 로브",
+    "value": 80
+  },
+  {
+    "description": "단순한 나무 횃불입니다. 어두운 곳을 밝혀줍니다.",
+    "id": "횃불",
+    "item_type": "tool",
+    "name": "횃불",
+    "value": 2
+  },
+  {
+    "description": "강철검이다",
+    "id": "강철_검",
+    "name": "강철 검"
+  }
+]

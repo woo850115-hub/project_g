@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { Zone } from '../types/world';
 
 const DIR_LABELS: Record<string, string> = {
   north: '\uBD81\uCABD', south: '\uB0A8\uCABD',
@@ -231,6 +232,101 @@ export function SelectDialog({
   );
 }
 
+// --- Add Field Dialog ---
+
+interface FieldPreset {
+  key: string;
+  label: string;
+  desc: string;
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+}
+
+interface AddFieldDialogProps {
+  open: boolean;
+  presets: FieldPreset[];
+  existingKeys: string[];
+  onSelect: (key: string, type: 'string' | 'number' | 'boolean' | 'array' | 'object') => void;
+  onCancel: () => void;
+}
+
+export function AddFieldDialog({
+  open,
+  presets,
+  existingKeys,
+  onSelect,
+  onCancel,
+}: AddFieldDialogProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const available = presets.filter((p) => !existingKeys.includes(p.key));
+
+  const handleCustom = () => {
+    const val = inputRef.current?.value.trim();
+    if (val && !existingKeys.includes(val)) {
+      onSelect(val, 'string');
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onCancel} title="필드 추가" width="max-w-lg">
+      {available.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-xs text-gray-400 mb-2">추천 필드</label>
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {available.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => onSelect(p.key, p.type)}
+                className="w-full text-left px-3 py-2 rounded hover:bg-gray-700 transition-colors group"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-blue-300 font-mono">{p.key}</span>
+                  <span className="text-[10px] text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded group-hover:bg-gray-600">
+                    {p.type}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500">{p.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {available.length === 0 && presets.length > 0 && (
+        <p className="text-xs text-gray-500 mb-3">모든 추천 필드가 이미 추가되어 있습니다.</p>
+      )}
+      <div>
+        <label className="block text-xs text-gray-400 mb-1">직접 입력</label>
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="필드 이름"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCustom();
+            }}
+            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+          <button
+            onClick={handleCustom}
+            className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
+          >
+            추가
+          </button>
+        </div>
+      </div>
+      <div className="flex justify-end mt-4">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
+        >
+          닫기
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+export type { FieldPreset };
+
 // --- Multi-step Room Exit Dialog ---
 
 interface AddExitDialogProps {
@@ -425,16 +521,124 @@ export function AddEntityDialog({
 interface AddRoomDialogProps {
   open: boolean;
   existingIds: string[];
-  onSubmit: (id: string, name: string) => void;
+  zones?: Zone[];
+  defaultZoneId?: string;
+  onSubmit: (id: string, name: string, zoneId?: string) => void;
   onCancel: () => void;
 }
 
 export function AddRoomDialog({
   open,
   existingIds,
+  zones,
+  defaultZoneId,
   onSubmit,
   onCancel,
 }: AddRoomDialogProps) {
+  const idRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const zoneRef = useRef<HTMLSelectElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (open) setTimeout(() => idRef.current?.focus(), 50);
+  }, [open]);
+
+  const handleSubmit = () => {
+    const id = idRef.current?.value.trim();
+    const name = nameRef.current?.value.trim() || id;
+    if (!id) return;
+    if (existingIds.includes(id)) {
+      if (errorRef.current) errorRef.current.textContent = `방 ID "${id}"이(가) 이미 존재합니다`;
+      return;
+    }
+    const zoneId = zoneRef.current?.value || undefined;
+    onSubmit(id, name!, zoneId);
+  };
+
+  return (
+    <Modal open={open} onClose={onCancel} title="방 추가">
+      <div className="space-y-3 mb-4">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">방 ID</label>
+          <input
+            ref={idRef}
+            type="text"
+            placeholder="예: tavern"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') nameRef.current?.focus();
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">방 이름</label>
+          <input
+            ref={nameRef}
+            type="text"
+            placeholder="예: 오래된 선술집"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSubmit();
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        {zones && zones.length > 0 && (
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">존</label>
+            <select
+              ref={zoneRef}
+              defaultValue={defaultZoneId || ''}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+            >
+              <option value="">없음</option>
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <p ref={errorRef} className="text-xs text-red-400"></p>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
+        >
+          취소
+        </button>
+        <button
+          onClick={handleSubmit}
+          className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
+        >
+          방 추가
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// --- Add Connected Room Dialog ---
+
+interface AddConnectedRoomDialogProps {
+  open: boolean;
+  direction: string;
+  parentRoomName: string;
+  existingIds: string[];
+  onSubmit: (id: string, name: string) => void;
+  onCancel: () => void;
+}
+
+export function AddConnectedRoomDialog({
+  open,
+  direction,
+  parentRoomName,
+  existingIds,
+  onSubmit,
+  onCancel,
+}: AddConnectedRoomDialogProps) {
   const idRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
@@ -454,8 +658,15 @@ export function AddRoomDialog({
     onSubmit(id, name!);
   };
 
+  const dirLabel = DIR_LABELS[direction] || direction;
+
   return (
-    <Modal open={open} onClose={onCancel} title="방 추가">
+    <Modal open={open} onClose={onCancel} title="연결된 방 추가">
+      <p className="text-xs text-gray-400 mb-3">
+        <span className="text-blue-400">{parentRoomName}</span>
+        {' \u2192 '}
+        <span className="text-green-400">{dirLabel}</span> 방향으로 새 방 추가
+      </p>
       <div className="space-y-3 mb-4">
         <div>
           <label className="block text-xs text-gray-400 mb-1">방 ID</label>

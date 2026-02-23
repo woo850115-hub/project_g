@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Room, PlacedEntity } from '../types/world';
+import type { Room, PlacedEntity, Zone } from '../types/world';
 import { contentApi } from '../api/client';
 import type { ContentItem } from '../types/content';
 import { AddExitDialog, AddEntityDialog } from './Modal';
@@ -8,23 +8,30 @@ import { Tooltip } from './Tooltip';
 const DIRECTIONS = ['north', 'south', 'east', 'west', 'up', 'down'] as const;
 
 const DIR_LABELS: Record<string, string> = {
-  north: '\uBD81\uCABD', south: '\uB0A8\uCABD',
-  east: '\uB3D9\uCABD', west: '\uC11C\uCABD',
-  up: '\uC704', down: '\uC544\uB798',
+  north: '북쪽', south: '남쪽',
+  east: '동쪽', west: '서쪽',
+  up: '위', down: '아래',
 };
 
 interface RoomPanelProps {
   room: Room;
   allRooms: Room[];
+  zones: Zone[];
   collections: string[];
   onChange: (room: Room) => void;
   onDelete: () => void;
+  onDeleteZone: (zoneId: string) => void;
+  onEditZone: (zoneId: string, name: string, color: string) => void;
+  onAddConnectedRoom: (direction: string) => void;
 }
 
-export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: RoomPanelProps) {
+export function RoomPanel({ room, allRooms, zones, collections, onChange, onDelete, onDeleteZone, onEditZone, onAddConnectedRoom }: RoomPanelProps) {
   const [contentItems, setContentItems] = useState<Record<string, ContentItem[]>>({});
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
   const [entityDialogOpen, setEntityDialogOpen] = useState(false);
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
+  const [editZoneName, setEditZoneName] = useState('');
+  const [editZoneColor, setEditZoneColor] = useState('');
 
   // Load content items for available collections
   useEffect(() => {
@@ -77,6 +84,8 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
   const removeEntity = (index: number) => {
     update({ entities: room.entities.filter((_, i) => i !== index) });
   };
+
+  const currentZone = zones.find((z) => z.id === room.zone_id);
 
   return (
     <div className="p-4 space-y-5">
@@ -135,6 +144,31 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm"
           />
         </div>
+
+        {/* Zone selector */}
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">존</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={room.zone_id || ''}
+              onChange={(e) => update({ zone_id: e.target.value || undefined })}
+              className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm"
+            >
+              <option value="">없음</option>
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
+            {currentZone && (
+              <span
+                className="w-4 h-4 rounded-full border border-gray-500 flex-shrink-0"
+                style={{ backgroundColor: currentZone.color }}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Exits */}
@@ -179,6 +213,66 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
         )}
       </div>
 
+      {/* Quick-connect compass */}
+      {availableDirections.length > 0 && (
+        <div>
+          <label className="text-xs text-gray-400 font-medium mb-2 block">방향별 방 추가</label>
+          <div className="grid grid-cols-3 gap-1 w-36 mx-auto">
+            <div />
+            {availableDirections.includes('north') ? (
+              <button
+                onClick={() => onAddConnectedRoom('north')}
+                className="px-2 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded text-center"
+              >
+                북
+              </button>
+            ) : <div className="px-2 py-1 text-xs text-gray-700 text-center">-</div>}
+            {availableDirections.includes('up') ? (
+              <button
+                onClick={() => onAddConnectedRoom('up')}
+                className="px-2 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded text-center"
+              >
+                위
+              </button>
+            ) : <div className="px-2 py-1 text-xs text-gray-700 text-center">-</div>}
+            {availableDirections.includes('west') ? (
+              <button
+                onClick={() => onAddConnectedRoom('west')}
+                className="px-2 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded text-center"
+              >
+                서
+              </button>
+            ) : <div className="px-2 py-1 text-xs text-gray-700 text-center">-</div>}
+            <div className="px-2 py-1 text-xs text-gray-500 text-center font-bold">+</div>
+            {availableDirections.includes('east') ? (
+              <button
+                onClick={() => onAddConnectedRoom('east')}
+                className="px-2 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded text-center"
+              >
+                동
+              </button>
+            ) : <div className="px-2 py-1 text-xs text-gray-700 text-center">-</div>}
+            <div />
+            {availableDirections.includes('south') ? (
+              <button
+                onClick={() => onAddConnectedRoom('south')}
+                className="px-2 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded text-center"
+              >
+                남
+              </button>
+            ) : <div className="px-2 py-1 text-xs text-gray-700 text-center">-</div>}
+            {availableDirections.includes('down') ? (
+              <button
+                onClick={() => onAddConnectedRoom('down')}
+                className="px-2 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded text-center"
+              >
+                아래
+              </button>
+            ) : <div className="px-2 py-1 text-xs text-gray-700 text-center">-</div>}
+          </div>
+        </div>
+      )}
+
       {/* Entities */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -222,6 +316,86 @@ export function RoomPanel({ room, allRooms, collections, onChange, onDelete }: R
           </div>
         )}
       </div>
+
+      {/* Zone management (at bottom) */}
+      {zones.length > 0 && (
+        <div className="border-t border-gray-700 pt-4">
+          <label className="text-xs text-gray-400 font-medium">존 관리</label>
+          <div className="space-y-1 mt-2">
+            {zones.map((z) => (
+              <div
+                key={z.id}
+                className="flex items-center justify-between bg-gray-700/50 rounded px-2 py-1.5 text-sm"
+              >
+                {editingZoneId === z.id ? (
+                  <div className="flex items-center gap-2 flex-1 mr-2">
+                    <input
+                      type="color"
+                      value={editZoneColor}
+                      onChange={(e) => setEditZoneColor(e.target.value)}
+                      className="w-6 h-6 rounded border border-gray-500 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={editZoneName}
+                      onChange={(e) => setEditZoneName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          onEditZone(z.id, editZoneName, editZoneColor);
+                          setEditingZoneId(null);
+                        }
+                        if (e.key === 'Escape') setEditingZoneId(null);
+                      }}
+                      className="flex-1 bg-gray-600 border border-gray-500 rounded px-1.5 py-0.5 text-xs"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        onEditZone(z.id, editZoneName, editZoneColor);
+                        setEditingZoneId(null);
+                      }}
+                      className="text-xs text-green-400 hover:text-green-300"
+                    >
+                      OK
+                    </button>
+                  </div>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="w-3 h-3 rounded-full border border-gray-500"
+                      style={{ backgroundColor: z.color }}
+                    />
+                    <span className="text-gray-300">{z.name}</span>
+                    <span className="text-gray-600 text-xs">
+                      ({allRooms.filter((r) => r.zone_id === z.id).length})
+                    </span>
+                  </span>
+                )}
+                {editingZoneId !== z.id && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setEditingZoneId(z.id);
+                        setEditZoneName(z.name);
+                        setEditZoneColor(z.color);
+                      }}
+                      className="text-gray-500 hover:text-blue-400 text-xs"
+                    >
+                      edit
+                    </button>
+                    <button
+                      onClick={() => onDeleteZone(z.id)}
+                      className="text-gray-500 hover:text-red-400 text-xs"
+                    >
+                      x
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

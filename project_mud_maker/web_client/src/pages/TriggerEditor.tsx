@@ -14,13 +14,47 @@ const CONDITION_TYPES = [
   { value: 'on_connect', label: '\uD50C\uB808\uC774\uC5B4 \uC811\uC18D', desc: '\uD50C\uB808\uC774\uC5B4\uAC00 \uC11C\uBC84\uC5D0 \uC811\uC18D\uD560 \uB54C \uBC1C\uB3D9' },
 ] as const;
 
+// ECS component list for set_component action
+// inputType: 'number' | 'string' | 'boolean' | 'health' | 'level' | 'skills'
+const ECS_COMPONENTS: {
+  value: string; label: string; inputType: string;
+}[] = [
+  { value: 'Name', label: '이름 (Name)', inputType: 'string' },
+  { value: 'Description', label: '설명 (Description)', inputType: 'string' },
+  { value: 'Health', label: '체력 (Health)', inputType: 'health' },
+  { value: 'Attack', label: '공격력 (Attack)', inputType: 'number' },
+  { value: 'Defense', label: '방어력 (Defense)', inputType: 'number' },
+  { value: 'Gold', label: '골드 (Gold)', inputType: 'number' },
+  { value: 'Race', label: '종족 (Race)', inputType: 'string' },
+  { value: 'Class', label: '직업 (Class)', inputType: 'string' },
+  { value: 'Level', label: '레벨 (Level)', inputType: 'level' },
+  { value: 'Skills', label: '스킬 (Skills)', inputType: 'skills' },
+  { value: 'Dead', label: '사망 (Dead)', inputType: 'boolean' },
+  { value: 'PlayerTag', label: '플레이어 태그 (PlayerTag)', inputType: 'boolean' },
+  { value: 'NpcTag', label: 'NPC 태그 (NpcTag)', inputType: 'boolean' },
+  { value: 'ItemTag', label: '아이템 태그 (ItemTag)', inputType: 'boolean' },
+];
+
+// Default value for each component when selected
+function defaultComponentValue(comp: string): unknown {
+  switch (comp) {
+    case 'Health': return { current: 100, max: 100 };
+    case 'Level': return { level: 1, exp: 0, exp_next: 100 };
+    case 'Skills': return { learned: [] };
+    case 'Attack': case 'Defense': case 'Gold': return 0;
+    case 'Dead': case 'PlayerTag': case 'NpcTag': case 'ItemTag': return true;
+    default: return '';
+  }
+}
+
 const ACTION_TYPES = [
   { value: 'send_message', label: '\uBA54\uC2DC\uC9C0 \uC804\uC1A1', desc: '\uD50C\uB808\uC774\uC5B4\uB098 \uBC29 \uC804\uCCB4\uC5D0 \uD14D\uC2A4\uD2B8 \uBA54\uC2DC\uC9C0\uB97C \uBCF4\uB0C5\uB2C8\uB2E4' },
   { value: 'spawn_entity', label: '\uC5D4\uD2F0\uD2F0 \uC0DD\uC131', desc: '\uC9C0\uC815\uD55C \uBC29\uC5D0 NPC\uB098 \uC544\uC774\uD15C\uC744 \uC0DD\uC131\uD569\uB2C8\uB2E4' },
   { value: 'teleport', label: '\uD50C\uB808\uC774\uC5B4 \uC774\uB3D9', desc: '\uD50C\uB808\uC774\uC5B4\uB97C \uC9C0\uC815\uD55C \uBC29\uC73C\uB85C \uC774\uB3D9\uC2DC\uD0B5\uB2C8\uB2E4' },
   { value: 'give_item', label: '\uC544\uC774\uD15C \uC9C0\uAE09', desc: '\uD50C\uB808\uC774\uC5B4\uC5D0\uAC8C \uC544\uC774\uD15C\uC744 \uC9C0\uAE09\uD569\uB2C8\uB2E4' },
-  { value: 'set_component', label: '\uCEF4\uD3EC\uB10C\uD2B8 \uC124\uC815', desc: '\uC5D4\uD2F0\uD2F0\uC758 ECS \uCEF4\uD3EC\uB10C\uD2B8 \uAC12\uC744 \uC124\uC815\uD569\uB2C8\uB2E4' },
-  { value: 'despawn_trigger_entity', label: '\uC5D4\uD2F0\uD2F0 \uC81C\uAC70', desc: '\uD2B8\uB9AC\uAC70\uB97C \uBC1C\uB3D9\uC2DC\uD0A8 \uC5D4\uD2F0\uD2F0\uB97C \uC81C\uAC70\uD569\uB2C8\uB2E4' },
+  { value: 'heal', label: '체력 회복', desc: '엔티티의 체력을 회복시킵니다 (최대 체력 초과 불가)' },
+  { value: 'set_component', label: '컴포넌트 설정', desc: '엔티티의 ECS 컴포넌트 값을 설정합니다' },
+  { value: 'despawn_trigger_entity', label: '엔티티 제거', desc: '트리거를 발동시킨 엔티티를 제거합니다' },
 ] as const;
 
 function makeDefaultCondition(type: string): TriggerCondition {
@@ -40,6 +74,7 @@ function makeDefaultAction(type: string): TriggerAction {
     case 'spawn_entity': return { type: 'spawn_entity', entity_type: 'npc', content_id: '', room_id: '' };
     case 'teleport': return { type: 'teleport', room_id: '' };
     case 'give_item': return { type: 'give_item', content_id: '' };
+    case 'heal': return { type: 'heal', target: 'player', mode: 'full', amount: 0 };
     case 'set_component': return { type: 'set_component', target: 'player', component: '', value: '' };
     case 'despawn_trigger_entity': return { type: 'despawn_trigger_entity' };
     default: return { type: 'send_message', target: 'player', text: '' };
@@ -595,35 +630,239 @@ function ActionFields({ action, rooms, contentItems, onChange }: ActionFieldsPro
         </div>
       );
 
-    case 'set_component':
+    case 'heal':
+      return (
+        <div className="space-y-2">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">대상</label>
+            <select
+              value={action.target}
+              onChange={(e) => onChange({ ...action, target: e.target.value })}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+            >
+              <option value="player">플레이어</option>
+              <option value="entity">엔티티</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">회복 모드</label>
+            <select
+              value={action.mode}
+              onChange={(e) => onChange({ ...action, mode: e.target.value })}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+            >
+              <option value="full">완전 회복 (최대 체력으로)</option>
+              <option value="percent">비율 회복 (최대 체력의 N%)</option>
+              <option value="fixed">고정량 회복 (N만큼)</option>
+            </select>
+          </div>
+          {action.mode !== 'full' && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">
+                {action.mode === 'percent' ? '회복 비율 (%)' : '회복량'}
+              </label>
+              <input
+                type="number"
+                value={action.amount}
+                onChange={(e) => onChange({ ...action, amount: Number(e.target.value) || 0 })}
+                min={action.mode === 'percent' ? 1 : 1}
+                max={action.mode === 'percent' ? 100 : undefined}
+                placeholder={action.mode === 'percent' ? '1~100' : '회복할 HP'}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                {action.mode === 'percent'
+                  ? `최대 체력의 ${action.amount || 0}%를 회복합니다 (최대 체력 초과 불가)`
+                  : `${action.amount || 0} HP를 회복합니다 (최대 체력 초과 불가)`}
+              </p>
+            </div>
+          )}
+        </div>
+      );
+
+    case 'set_component': {
+      const compInfo = ECS_COMPONENTS.find((c) => c.value === action.component);
+      const inputType = compInfo?.inputType || 'string';
+
+      // Ensure value is the right shape when component changes
+      const onCompChange = (comp: string) => {
+        onChange({ ...action, component: comp, value: defaultComponentValue(comp) });
+      };
+
+      // Helper to update a nested key in an object value
+      const val = action.value as Record<string, unknown> | undefined;
+      const updateObj = (key: string, v: unknown) => {
+        onChange({ ...action, value: { ...(typeof action.value === 'object' && action.value ? action.value as Record<string, unknown> : {}), [key]: v } });
+      };
+
       return (
         <div className="space-y-2">
           <div>
             <label className="block text-xs text-gray-400 mb-1">컴포넌트</label>
-            <input
-              type="text"
+            <select
               value={action.component}
-              onChange={(e) => onChange({ ...action, component: e.target.value })}
-              placeholder="예: Health, Attack"
+              onChange={(e) => onCompChange(e.target.value)}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
-            />
+            >
+              <option value="">-- 선택 --</option>
+              {ECS_COMPONENTS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
           </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">값</label>
-            <input
-              type="text"
-              value={String(action.value ?? '')}
-              onChange={(e) => {
-                const v = e.target.value;
-                const num = Number(v);
-                onChange({ ...action, value: !isNaN(num) && v !== '' ? num : v });
-              }}
-              placeholder="값"
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
-            />
-          </div>
+
+          {/* Value input — varies by component type */}
+          {inputType === 'number' && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">값</label>
+              <input
+                type="number"
+                value={typeof action.value === 'number' ? action.value : 0}
+                onChange={(e) => onChange({ ...action, value: Number(e.target.value) || 0 })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+              />
+            </div>
+          )}
+
+          {inputType === 'string' && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">값</label>
+              <input
+                type="text"
+                value={String(action.value ?? '')}
+                onChange={(e) => onChange({ ...action, value: e.target.value })}
+                placeholder="텍스트 값"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+              />
+            </div>
+          )}
+
+          {inputType === 'boolean' && (
+            <p className="text-xs text-gray-500">
+              이 컴포넌트를 엔티티에 설정합니다 (태그).
+            </p>
+          )}
+
+          {inputType === 'health' && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">현재 체력</label>
+                <input
+                  type="number"
+                  value={typeof val?.current === 'number' ? val.current : 0}
+                  onChange={(e) => updateObj('current', Number(e.target.value) || 0)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">최대 체력</label>
+                <input
+                  type="number"
+                  value={typeof val?.max === 'number' ? val.max : 0}
+                  onChange={(e) => updateObj('max', Number(e.target.value) || 0)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {inputType === 'level' && (
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">레벨</label>
+                <input
+                  type="number"
+                  value={typeof val?.level === 'number' ? val.level : 1}
+                  onChange={(e) => updateObj('level', Number(e.target.value) || 1)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">경험치</label>
+                <input
+                  type="number"
+                  value={typeof val?.exp === 'number' ? val.exp : 0}
+                  onChange={(e) => updateObj('exp', Number(e.target.value) || 0)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">다음 레벨</label>
+                <input
+                  type="number"
+                  value={typeof val?.exp_next === 'number' ? val.exp_next : 100}
+                  onChange={(e) => updateObj('exp_next', Number(e.target.value) || 100)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {inputType === 'skills' && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">보유 스킬</label>
+              <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                {(Array.isArray((val as Record<string, unknown>)?.learned)
+                  ? ((val as Record<string, unknown>).learned as string[])
+                  : []
+                ).map((skill, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs"
+                  >
+                    {skill}
+                    <button
+                      onClick={() => {
+                        const learned = [...((val as Record<string, unknown>)?.learned as string[] || [])];
+                        learned.splice(i, 1);
+                        onChange({ ...action, value: { learned } });
+                      }}
+                      className="text-gray-500 hover:text-red-400"
+                    >&times;</button>
+                  </span>
+                ))}
+              </div>
+              {contentItems['skills'] && contentItems['skills'].length > 0 ? (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const learned = [...((val as Record<string, unknown>)?.learned as string[] || [])];
+                      if (!learned.includes(e.target.value)) learned.push(e.target.value);
+                      onChange({ ...action, value: { learned } });
+                      e.target.value = '';
+                    }
+                  }}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-400"
+                >
+                  <option value="">+ 스킬 추가...</option>
+                  {contentItems['skills'].map((s) => (
+                    <option key={s.id} value={s.id}>{String(s.name || s.id)}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="스킬 ID 입력 후 Enter"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const v = (e.target as HTMLInputElement).value.trim();
+                      if (v) {
+                        const learned = [...((val as Record<string, unknown>)?.learned as string[] || [])];
+                        if (!learned.includes(v)) learned.push(v);
+                        onChange({ ...action, value: { learned } });
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }
+                  }}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                />
+              )}
+            </div>
+          )}
         </div>
       );
+    }
 
     case 'despawn_trigger_entity':
       return (

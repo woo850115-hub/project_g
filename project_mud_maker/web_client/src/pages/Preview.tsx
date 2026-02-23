@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { AnsiUp } from 'ansi_up';
 import { serverApi } from '../api/client';
 import type { ServerStatus } from '../types/api';
 import { Tooltip } from '../components/Tooltip';
@@ -12,6 +13,9 @@ export function Preview() {
   const [stopping, setStopping] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // ANSI to HTML converter (inline styles for color rendering)
+  const ansiUp = useMemo(() => new AnsiUp(), []);
 
   // Terminal refs
   const termRef = useRef<HTMLDivElement>(null);
@@ -319,25 +323,16 @@ export function Preview() {
               지우기
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 font-mono text-xs">
+          <div className="flex-1 overflow-y-auto p-2 font-mono text-xs text-gray-300">
             {logs.length === 0 ? (
               <p className="text-gray-600">로그가 없습니다. 서버를 시작하면 출력을 볼 수 있습니다.</p>
             ) : (
               logs.map((line, i) => (
                 <div
                   key={i}
-                  className={`py-0.5 ${
-                    line.includes('ERROR')
-                      ? 'text-red-400'
-                      : line.includes('WARN')
-                        ? 'text-yellow-400'
-                        : line.includes('INFO')
-                          ? 'text-green-300'
-                          : 'text-gray-400'
-                  }`}
-                >
-                  {line}
-                </div>
+                  className="py-0.5 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: ansiUp.ansi_to_html(line) }}
+                />
               ))
             )}
             <div ref={logsEndRef} />

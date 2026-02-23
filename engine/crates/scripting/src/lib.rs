@@ -6,12 +6,14 @@ pub mod component_registry;
 pub mod api;
 pub mod template;
 pub mod content;
+pub mod auth;
 
 pub use engine::ScriptEngine;
 pub use error::ScriptError;
 pub use sandbox::ScriptConfig;
 pub use hooks::HookRegistry;
 pub use content::ContentRegistry;
+pub use auth::{AuthProvider, AuthAccountInfo, AuthCharacterSummary, AuthCharacterDetail, AuthError};
 
 // Re-export mlua for downstream crates implementing ScriptComponent
 pub use mlua;

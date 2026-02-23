@@ -1,1 +1,8 @@
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+
+/* Ensure React Flow container has proper dimensions even with Tailwind preflight */
+.react-flow {
+  width: 100%;
+  height: 100%;
+}

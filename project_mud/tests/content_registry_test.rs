@@ -75,11 +75,11 @@ fn test_content_loaded_into_lua() {
         )
         .unwrap();
 
-    let (mut ecs, mut space, sessions) = setup_world();
+    let (mut ecs, mut space, mut sessions) = setup_world();
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -135,11 +135,11 @@ fn test_content_subdirectory_loading() {
         )
         .unwrap();
 
-    let (mut ecs, mut space, sessions) = setup_world();
+    let (mut ecs, mut space, mut sessions) = setup_world();
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -180,11 +180,11 @@ fn test_content_in_hooks() {
         )
         .unwrap();
 
-    let (mut ecs, mut space, sessions) = setup_world();
+    let (mut ecs, mut space, mut sessions) = setup_world();
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 5,
     };
 
@@ -216,11 +216,11 @@ fn test_no_content_dir_graceful() {
         )
         .unwrap();
 
-    let (mut ecs, mut space, sessions) = setup_world();
+    let (mut ecs, mut space, mut sessions) = setup_world();
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -263,11 +263,11 @@ fn test_content_complex_values() {
         )
         .unwrap();
 
-    let (mut ecs, mut space, sessions) = setup_world();
+    let (mut ecs, mut space, mut sessions) = setup_world();
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut space,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -317,12 +317,12 @@ fn test_content_with_grid_space() {
         origin_x: 0,
         origin_y: 0,
     });
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 

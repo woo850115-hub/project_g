@@ -1,0 +1,38 @@
+[
+  {
+    "id": "전사",
+    "name": "전사",
+    "description": "강력한 근접 전투 전문가입니다.",
+    "hp_bonus": 20,
+    "attack_bonus": 3,
+    "defense_bonus": 3,
+    "starting_skills": ["강타", "전투 함성"]
+  },
+  {
+    "id": "마법사",
+    "name": "마법사",
+    "description": "강력한 마법을 다루는 학자입니다.",
+    "hp_bonus": -10,
+    "attack_bonus": 7,
+    "defense_bonus": 0,
+    "starting_skills": ["화염구", "냉기 화살"]
+  },
+  {
+    "id": "도적",
+    "name": "도적",
+    "description": "은밀하고 치명적인 암살자입니다.",
+    "hp_bonus": 0,
+    "attack_bonus": 5,
+    "defense_bonus": 1,
+    "starting_skills": ["급소 공격", "독 바르기"]
+  },
+  {
+    "id": "성직자",
+    "name": "성직자",
+    "description": "치유와 신성한 힘을 다루는 사제입니다.",
+    "hp_bonus": 10,
+    "attack_bonus": 2,
+    "defense_bonus": 2,
+    "starting_skills": ["치유", "신성한 일격"]
+  }
+]

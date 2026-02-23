@@ -34,12 +34,12 @@ fn grid_lua_set_and_get_position() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -70,12 +70,12 @@ fn grid_lua_move_to() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -111,12 +111,12 @@ fn grid_lua_entities_in_radius() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -143,12 +143,12 @@ fn grid_lua_in_bounds() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -174,12 +174,12 @@ fn grid_lua_grid_config() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -207,12 +207,12 @@ fn grid_lua_entity_count() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -242,12 +242,12 @@ fn grid_lua_entity_room_via_spacemodel() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -276,12 +276,12 @@ fn grid_lua_roomgraph_methods_error() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 
@@ -318,14 +318,14 @@ fn grid_lua_on_tick_moves_entity() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     // Run on_init to spawn and place entity
     {
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut grid,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 0,
         };
         engine.run_on_init(&mut ctx).unwrap();
@@ -336,7 +336,7 @@ fn grid_lua_on_tick_moves_entity() {
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut grid,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick,
         };
         engine.run_on_tick(&mut ctx).unwrap();
@@ -370,12 +370,12 @@ fn grid_lua_place_and_remove_entity() {
 
     let mut ecs = EcsAdapter::new();
     let mut grid = make_grid();
-    let sessions = SessionManager::new();
+    let mut sessions = SessionManager::new();
 
     let mut ctx = ScriptContext {
         ecs: &mut ecs,
         space: &mut grid,
-        sessions: &sessions,
+        sessions: &mut sessions,
         tick: 0,
     };
 

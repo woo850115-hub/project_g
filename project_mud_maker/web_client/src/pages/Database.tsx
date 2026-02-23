@@ -1,8 +1,91 @@
 import { useCallback, useEffect, useState } from 'react';
 import { contentApi } from '../api/client';
 import type { ContentItem } from '../types/content';
-import { PromptDialog, ConfirmDialog } from '../components/Modal';
+import { PromptDialog, ConfirmDialog, AddFieldDialog } from '../components/Modal';
+import type { FieldPreset } from '../components/Modal';
 import { Tooltip } from '../components/Tooltip';
+
+// Enum fields: collection → field → selectable options
+const ENUM_OPTIONS: Record<string, Record<string, { value: string; label: string }[]>> = {
+  items: {
+    item_type: [
+      { value: 'weapon', label: '무기 (weapon)' },
+      { value: 'armor', label: '방어구 (armor)' },
+      { value: 'consumable', label: '소모품 (consumable)' },
+      { value: 'material', label: '재료 (material)' },
+      { value: 'currency', label: '화폐 (currency)' },
+      { value: 'quest', label: '퀘스트 (quest)' },
+      { value: 'tool', label: '도구 (tool)' },
+    ],
+  },
+  skills: {
+    type: [
+      { value: 'attack', label: '공격 (attack)' },
+      { value: 'heal', label: '치유 (heal)' },
+      { value: 'attack_heal', label: '공격+치유 (attack_heal)' },
+    ],
+  },
+};
+
+// Fields that reference IDs from another collection
+const REF_FIELDS: Record<string, Record<string, { refCollection: string; multiple: boolean }>> = {
+  monsters: {
+    loot_table: { refCollection: 'items', multiple: true },
+  },
+  races: {
+    racial_skill: { refCollection: 'skills', multiple: false },
+  },
+  classes: {
+    starting_skills: { refCollection: 'skills', multiple: true },
+  },
+};
+
+const FIELD_PRESETS: Record<string, FieldPreset[]> = {
+  monsters: [
+    { key: 'name', label: '이름', desc: '몬스터 표시 이름', type: 'string' },
+    { key: 'description', label: '설명', desc: '몬스터 설명 텍스트', type: 'string' },
+    { key: 'hp', label: '체력', desc: '최대 체력 (HP)', type: 'number' },
+    { key: 'attack', label: '공격력', desc: '기본 공격력', type: 'number' },
+    { key: 'defense', label: '방어력', desc: '기본 방어력', type: 'number' },
+    { key: 'exp_reward', label: '경험치 보상', desc: '처치 시 획득 경험치', type: 'number' },
+    { key: 'loot_table', label: '드랍 테이블', desc: '드랍 아이템 ID 목록 (배열)', type: 'array' },
+    { key: 'is_friendly', label: '우호적', desc: '공격 불가 NPC 여부', type: 'boolean' },
+    { key: 'dialogue', label: '대사', desc: 'NPC 대화 텍스트', type: 'string' },
+  ],
+  items: [
+    { key: 'name', label: '이름', desc: '아이템 표시 이름', type: 'string' },
+    { key: 'description', label: '설명', desc: '아이템 설명 텍스트', type: 'string' },
+    { key: 'item_type', label: '아이템 유형', desc: '무기 / 방어구 / 소모품 / 재료 / 화폐 / 퀘스트 / 도구', type: 'string' },
+    { key: 'value', label: '가치', desc: '골드 가치 또는 화폐 단위', type: 'number' },
+    { key: 'attack_bonus', label: '공격력 보너스', desc: '장착 시 공격력 증가량', type: 'number' },
+    { key: 'defense_bonus', label: '방어력 보너스', desc: '장착 시 방어력 증가량', type: 'number' },
+    { key: 'heal_amount', label: '회복량', desc: '사용 시 HP 회복량', type: 'number' },
+  ],
+  races: [
+    { key: 'name', label: '이름', desc: '종족 표시 이름', type: 'string' },
+    { key: 'description', label: '설명', desc: '종족 설명 텍스트', type: 'string' },
+    { key: 'hp_bonus', label: 'HP 보너스', desc: '기본 체력 보정치', type: 'number' },
+    { key: 'attack_bonus', label: '공격력 보너스', desc: '기본 공격력 보정치', type: 'number' },
+    { key: 'defense_bonus', label: '방어력 보너스', desc: '기본 방어력 보정치', type: 'number' },
+    { key: 'racial_skill', label: '종족 스킬', desc: '종족 고유 스킬 (없으면 비워두기)', type: 'string' },
+  ],
+  classes: [
+    { key: 'name', label: '이름', desc: '직업 표시 이름', type: 'string' },
+    { key: 'description', label: '설명', desc: '직업 설명 텍스트', type: 'string' },
+    { key: 'hp_bonus', label: 'HP 보너스', desc: '기본 체력 보정치', type: 'number' },
+    { key: 'attack_bonus', label: '공격력 보너스', desc: '기본 공격력 보정치', type: 'number' },
+    { key: 'defense_bonus', label: '방어력 보너스', desc: '기본 방어력 보정치', type: 'number' },
+    { key: 'starting_skills', label: '시작 스킬', desc: '캐릭터 생성 시 보유 스킬 목록 (배열)', type: 'array' },
+  ],
+  skills: [
+    { key: 'name', label: '이름', desc: '스킬 표시 이름', type: 'string' },
+    { key: 'description', label: '설명', desc: '스킬 설명 텍스트', type: 'string' },
+    { key: 'type', label: '스킬 유형', desc: '공격 / 치유 / 공격+치유', type: 'string' },
+    { key: 'damage_mult', label: '데미지 배율', desc: '기본 공격 대비 데미지 배율', type: 'number' },
+    { key: 'heal_amount', label: '회복량', desc: '치유/공격+치유 스킬의 체력 회복량', type: 'number' },
+    { key: 'cooldown', label: '쿨다운', desc: '사용 후 재사용 대기 틱 수', type: 'number' },
+  ],
+};
 
 export function Database() {
   const [collections, setCollections] = useState<string[]>([]);
@@ -13,6 +96,7 @@ export function Database() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [refItems, setRefItems] = useState<Record<string, ContentItem[]>>({});
 
   // Dialog states
   const [addItemDialog, setAddItemDialog] = useState(false);
@@ -47,9 +131,27 @@ export function Database() {
     }
   }, [activeCollection]);
 
+  // Load reference collections for cross-collection selectors
+  const loadRefCollections = useCallback(async () => {
+    const needed = new Set<string>();
+    for (const refs of Object.values(REF_FIELDS)) {
+      for (const r of Object.values(refs)) {
+        needed.add(r.refCollection);
+      }
+    }
+    const result: Record<string, ContentItem[]> = {};
+    for (const col of needed) {
+      try {
+        result[col] = await contentApi.listItems(col);
+      } catch { /* skip */ }
+    }
+    setRefItems(result);
+  }, []);
+
   useEffect(() => {
     loadCollections();
-  }, [loadCollections]);
+    loadRefCollections();
+  }, [loadCollections, loadRefCollections]);
 
   useEffect(() => {
     loadItems();
@@ -142,10 +244,15 @@ export function Database() {
   };
 
   // Add a new field to the editing item
-  const handleAddField = (key: string) => {
+  const handleAddField = (key: string, type: 'string' | 'number' | 'boolean' | 'array' | 'object') => {
     if (key === 'id') return;
     setAddFieldDialog(false);
-    setEditData((prev) => ({ ...prev, [key]: '' }));
+    const defaultValue = type === 'number' ? 0
+      : type === 'boolean' ? false
+      : type === 'array' ? []
+      : type === 'object' ? {}
+      : '';
+    setEditData((prev) => ({ ...prev, [key]: defaultValue }));
   };
 
   // Remove a field
@@ -213,12 +320,11 @@ export function Database() {
         onConfirm={handleDeleteCollection}
         onCancel={() => setDeleteCollectionDialog(false)}
       />
-      <PromptDialog
+      <AddFieldDialog
         open={addFieldDialog}
-        title="필드 추가"
-        label="필드 이름"
-        placeholder="예: hp"
-        onSubmit={handleAddField}
+        presets={activeCollection ? (FIELD_PRESETS[activeCollection] || []) : []}
+        existingKeys={Object.keys(editData)}
+        onSelect={handleAddField}
         onCancel={() => setAddFieldDialog(false)}
       />
 
@@ -341,11 +447,22 @@ export function Database() {
 
             {/* Dynamic form */}
             <div className="space-y-4 max-w-2xl">
-              {Object.entries(editData).map(([key, value]) => (
+              {Object.entries(editData).map(([key, value]) => {
+                const enumOpts = activeCollection ? ENUM_OPTIONS[activeCollection]?.[key] : undefined;
+                const refField = activeCollection ? REF_FIELDS[activeCollection]?.[key] : undefined;
+                const presetInfo = activeCollection
+                  ? FIELD_PRESETS[activeCollection]?.find((p) => p.key === key)
+                  : undefined;
+                const fieldLabel = presetInfo ? `${key}` : key;
+                const fieldHint = presetInfo?.desc;
+
+                return (
                 <div key={key} className="flex items-start gap-3">
-                  <label className="w-32 text-sm text-gray-400 pt-2 text-right shrink-0">
-                    {key}
-                  </label>
+                  <Tooltip text={fieldHint || key}>
+                    <label className="w-32 text-sm text-gray-400 pt-2 text-right shrink-0">
+                      {fieldLabel}
+                    </label>
+                  </Tooltip>
                   {key === 'id' ? (
                     <input
                       type="text"
@@ -353,6 +470,79 @@ export function Database() {
                       disabled
                       className="flex-1 bg-gray-700/50 text-gray-500 border border-gray-600 rounded px-3 py-1.5 text-sm"
                     />
+                  ) : enumOpts ? (
+                    /* Enum field — select dropdown */
+                    <select
+                      value={String(value ?? '')}
+                      onChange={(e) => updateField(key, e.target.value)}
+                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                    >
+                      <option value="">-- 선택 --</option>
+                      {enumOpts.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : refField && !refField.multiple ? (
+                    /* Single reference — select from other collection */
+                    <select
+                      value={String(value ?? '')}
+                      onChange={(e) => updateField(key, e.target.value || null)}
+                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                    >
+                      <option value="">없음</option>
+                      {(refItems[refField.refCollection] || []).map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {(item.name as string) || item.id}
+                        </option>
+                      ))}
+                    </select>
+                  ) : refField && refField.multiple && Array.isArray(value) ? (
+                    /* Multiple reference — tag list + add dropdown */
+                    <div className="flex-1">
+                      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                        {(value as string[]).map((refId, i) => {
+                          const refItem = (refItems[refField.refCollection] || []).find((r) => r.id === refId);
+                          const display = refItem ? ((refItem.name as string) || refItem.id) : refId;
+                          return (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs"
+                            >
+                              {display}
+                              <button
+                                onClick={() => {
+                                  const next = [...(value as string[])];
+                                  next.splice(i, 1);
+                                  updateField(key, next);
+                                }}
+                                className="text-gray-500 hover:text-red-400"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            updateField(key, [...(value as string[]), e.target.value]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-400"
+                      >
+                        <option value="">+ 추가...</option>
+                        {(refItems[refField.refCollection] || [])
+                          .filter((item) => !(value as string[]).includes(item.id))
+                          .map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {(item.name as string) || item.id}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   ) : typeof value === 'number' ? (
                     <input
                       type="number"
@@ -400,7 +590,8 @@ export function Database() {
                     </button>
                   )}
                 </div>
-              ))}
+                );
+              })}
 
               <Tooltip text="이 아이템에 새로운 속성 필드를 추가합니다">
                 <button

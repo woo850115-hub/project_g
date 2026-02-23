@@ -84,6 +84,14 @@ pub enum TriggerAction {
     DespawnTriggerEntity,
     #[serde(rename = "give_item")]
     GiveItem { content_id: String },
+    #[serde(rename = "heal")]
+    Heal {
+        #[serde(default = "default_target")]
+        target: String, // "player" or "entity"
+        mode: String,   // "full" | "percent" | "fixed"
+        #[serde(default)]
+        amount: u32, // percent: 1-100, fixed: HP amount. ignored for full
+    },
 }
 
 fn default_target() -> String {
@@ -479,12 +487,7 @@ fn gen_actions(lua: &mut String, actions: &[TriggerAction], indent: &str, conten
             TriggerAction::SetComponent {
                 component, value, ..
             } => {
-                let val_str = match value {
-                    Value::String(s) => format!("\"{}\"", escape_lua(s)),
-                    Value::Number(n) => n.to_string(),
-                    Value::Bool(b) => b.to_string(),
-                    other => format!("\"{}\"", escape_lua(&other.to_string())),
-                };
+                let val_str = json_to_lua_value(value);
                 lua.push_str(&format!(
                     "{indent}ecs:set(entity, \"{}\", {val_str})\n",
                     escape_lua(component)
@@ -513,6 +516,38 @@ fn gen_actions(lua: &mut String, actions: &[TriggerAction], indent: &str, conten
                     "{indent}ecs:set({var}, \"Inventory\", entity)\n"
                 ));
             }
+            TriggerAction::Heal { mode, amount, .. } => {
+                lua.push_str(&format!("{indent}do\n"));
+                lua.push_str(&format!(
+                    "{indent}    local hp = ecs:get(entity, \"Health\")\n"
+                ));
+                lua.push_str(&format!("{indent}    if hp then\n"));
+                match mode.as_str() {
+                    "percent" => {
+                        lua.push_str(&format!(
+                            "{indent}        hp.current = math.min(hp.current + math.floor(hp.max * {} / 100), hp.max)\n",
+                            amount
+                        ));
+                    }
+                    "fixed" => {
+                        lua.push_str(&format!(
+                            "{indent}        hp.current = math.min(hp.current + {}, hp.max)\n",
+                            amount
+                        ));
+                    }
+                    _ => {
+                        // "full" or default
+                        lua.push_str(&format!(
+                            "{indent}        hp.current = hp.max\n"
+                        ));
+                    }
+                }
+                lua.push_str(&format!(
+                    "{indent}        ecs:set(entity, \"Health\", hp)\n"
+                ));
+                lua.push_str(&format!("{indent}    end\n"));
+                lua.push_str(&format!("{indent}end\n"));
+            }
         }
     }
 }
@@ -538,9 +573,9 @@ fn load_content_item(
 fn sanitize_var(id: &str) -> String {
     let s: String = id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
         .collect();
-    if s.is_empty() || s.chars().next().unwrap().is_ascii_digit() {
+    if s.is_empty() || s.chars().next().map_or(true, |c| c.is_ascii_digit()) {
         format!("v_{s}")
     } else {
         s
@@ -552,4 +587,25 @@ fn escape_lua(s: &str) -> String {
         .replace('"', "\\\"")
         .replace('\n', "\\n")
         .replace('\r', "")
+}
+
+/// Convert a serde_json::Value to a valid Lua literal.
+fn json_to_lua_value(value: &Value) -> String {
+    match value {
+        Value::Null => "nil".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => format!("\"{}\"", escape_lua(s)),
+        Value::Array(arr) => {
+            let items: Vec<String> = arr.iter().map(json_to_lua_value).collect();
+            format!("{{{}}}", items.join(", "))
+        }
+        Value::Object(map) => {
+            let pairs: Vec<String> = map
+                .iter()
+                .map(|(k, v)| format!("{} = {}", k, json_to_lua_value(v)))
+                .collect();
+            format!("{{{}}}", pairs.join(", "))
+        }
+    }
 }

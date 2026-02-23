@@ -119,6 +119,39 @@ hooks.on_tick(function(tick)
                 end
             end
         end
+
+        -- Award experience and gold to the killer (find from rounds)
+        for _, round in ipairs(rounds) do
+            if round.target == dead_entity and ecs:has(round.attacker, "PlayerTag") and ecs:has(dead_entity, "NpcTag") then
+                local exp = calc_exp_reward(dead_entity)
+                local old_level_data = ecs:get(round.attacker, "Level")
+                local old_level = old_level_data and old_level_data.level or nil
+
+                local leveled = award_exp(round.attacker, exp)
+                local killer_sid = sessions:session_for(round.attacker)
+                if killer_sid then
+                    output:send(killer_sid, colors.bright_yellow .. "경험치 +" .. tostring(exp) .. colors.reset)
+                    if leveled then
+                        local new_level_data = ecs:get(round.attacker, "Level")
+                        if new_level_data then
+                            output:send(killer_sid, colors.bold .. colors.bright_yellow .. "레벨 업! Lv." .. tostring(new_level_data.level) .. colors.reset)
+                        end
+                    end
+                end
+
+                -- Award gold from loot_table
+                local gold_earned = calc_gold_drop(dead_entity)
+                if gold_earned > 0 then
+                    local current_gold = ecs:get(round.attacker, "Gold") or 0
+                    ecs:set(round.attacker, "Gold", current_gold + gold_earned)
+                    if killer_sid then
+                        output:send(killer_sid, colors.yellow .. "골드 +" .. tostring(gold_earned) .. colors.reset)
+                    end
+                end
+
+                break
+            end
+        end
     end
 
     -- Remove CombatTarget from resolved combats

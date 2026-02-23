@@ -1,0 +1,62 @@
+[
+  {
+    "id": "고블린",
+    "name": "고블린",
+    "description": "날카로운 이빨을 가진 작고 초록색 피부의 생물입니다.",
+    "hp": 30,
+    "attack": 5,
+    "defense": 2,
+    "exp_reward": 10,
+    "loot_table": ["녹슨_검", "금화"]
+  },
+  {
+    "id": "고블린_족장",
+    "name": "고블린 족장",
+    "description": "뼈로 만든 조잡한 왕관을 쓴 거대한 고블린입니다.",
+    "hp": 80,
+    "attack": 12,
+    "defense": 5,
+    "exp_reward": 50,
+    "loot_table": ["고블린_왕관", "치유_물약"]
+  },
+  {
+    "id": "해골_전사",
+    "name": "해골 전사",
+    "description": "녹슨 칼을 휘두르는 움직이는 해골입니다.",
+    "hp": 40,
+    "attack": 8,
+    "defense": 3,
+    "exp_reward": 15,
+    "loot_table": ["뼛가루", "녹슨_검"]
+  },
+  {
+    "id": "동굴_거미",
+    "name": "동굴 거미",
+    "description": "어두운 구석에 숨어있는 개만한 크기의 거미입니다.",
+    "hp": 20,
+    "attack": 6,
+    "defense": 1,
+    "exp_reward": 8,
+    "loot_table": ["거미줄"]
+  },
+  {
+    "id": "암흑_마법사",
+    "name": "암흑 마법사",
+    "description": "어둠의 기운이 감도는 두건을 쓴 인물입니다.",
+    "hp": 50,
+    "attack": 15,
+    "defense": 4,
+    "exp_reward": 40,
+    "loot_table": ["마나_수정", "암흑_로브"]
+  },
+  {
+    "id": "여관_주인",
+    "name": "여관 주인",
+    "description": "마을 여관을 운영하는 친절한 노인입니다.",
+    "hp": 100,
+    "attack": 0,
+    "defense": 0,
+    "is_friendly": true,
+    "dialogue": "어서 오세요, 여행자여! 여기서 쉬면서 힘을 되찾으세요."
+  }
+]

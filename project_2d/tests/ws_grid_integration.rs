@@ -70,7 +70,7 @@ fn run_grid_tick(
                     None => continue,
                 };
                 match state {
-                    SessionState::AwaitingLogin => {
+                    SessionState::Login => {
                         let name = line.trim().to_string();
                         if name.is_empty() {
                             continue;
@@ -134,7 +134,6 @@ fn run_grid_tick(
                         }
                     }
                     SessionState::Disconnected => {}
-                    _ => {} // AwaitingPassword, etc. not used in grid tests
                 }
             }
             NetToTick::Disconnected { session_id } => {

@@ -6,11 +6,13 @@ use session::{SessionId, SessionManager, SessionOutput};
 use space::model::SpaceModel;
 use tracing::{info, warn};
 
+use crate::api::auth::AuthProxy;
 use crate::api::ecs::EcsProxy;
 use crate::api::log::register_log_api;
 use crate::api::output::OutputProxy;
 use crate::api::session::SessionProxy;
 use crate::api::space::{IntoSpaceKind, SpaceProxy};
+use crate::auth::AuthProvider;
 use crate::component_registry::ScriptComponentRegistry;
 use crate::content::ContentRegistry;
 use crate::error::ScriptError;
@@ -22,7 +24,7 @@ use crate::sandbox::{self, ScriptConfig};
 pub struct ScriptContext<'a, S: SpaceModel> {
     pub ecs: &'a mut EcsAdapter,
     pub space: &'a mut S,
-    pub sessions: &'a SessionManager,
+    pub sessions: &'a mut SessionManager,
     pub tick: u64,
 }
 
@@ -186,7 +188,7 @@ impl ScriptEngine {
             };
             let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
             let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
-            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *const SessionManager) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
 
             let ecs_ud = scope.create_userdata(ecs_proxy)?;
             let space_ud = scope.create_userdata(space_proxy)?;
@@ -239,7 +241,7 @@ impl ScriptEngine {
             };
             let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
             let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
-            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *const SessionManager) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
 
             let ecs_ud = scope.create_userdata(ecs_proxy)?;
             let space_ud = scope.create_userdata(space_proxy)?;
@@ -293,7 +295,7 @@ impl ScriptEngine {
             };
             let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
             let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
-            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *const SessionManager) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
 
             let ecs_ud = scope.create_userdata(ecs_proxy)?;
             let space_ud = scope.create_userdata(space_proxy)?;
@@ -362,7 +364,7 @@ impl ScriptEngine {
             };
             let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
             let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
-            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *const SessionManager) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
 
             let ecs_ud = scope.create_userdata(ecs_proxy)?;
             let space_ud = scope.create_userdata(space_proxy)?;
@@ -420,7 +422,7 @@ impl ScriptEngine {
             };
             let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
             let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
-            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *const SessionManager) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
 
             let ecs_ud = scope.create_userdata(ecs_proxy)?;
             let space_ud = scope.create_userdata(space_proxy)?;
@@ -475,7 +477,7 @@ impl ScriptEngine {
             };
             let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
             let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
-            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *const SessionManager) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
 
             let ecs_ud = scope.create_userdata(ecs_proxy)?;
             let space_ud = scope.create_userdata(space_proxy)?;
@@ -521,6 +523,142 @@ impl ScriptEngine {
         })?;
 
         Ok((outputs, handled))
+    }
+
+    /// Run on_input hooks for a Login-state session.
+    /// The `auth` parameter is optional — when Some, an `auth` global is set for Lua.
+    /// Returns collected session outputs.
+    pub fn run_on_input<S: SpaceModel + IntoSpaceKind>(
+        &self,
+        ctx: &mut ScriptContext<'_, S>,
+        session_id: SessionId,
+        line: &str,
+        auth: Option<&dyn AuthProvider>,
+    ) -> Result<Vec<SessionOutput>, ScriptError> {
+        let hooks = self.lua.app_data_ref::<HookRegistry>().unwrap();
+        if hooks.on_input.is_empty() {
+            return Ok(Vec::new());
+        }
+        drop(hooks);
+
+        let mut outputs = Vec::new();
+        // Convert to raw pointer before entering scope to avoid lifetime escaping issues
+        // SAFETY: We convert the reference to a raw pointer to avoid lifetime issues
+        // with the scope closure. The pointer is only used within the scope below,
+        // and auth is guaranteed to outlive it (same tick-thread, synchronous call).
+        let auth_ptr: Option<*const dyn AuthProvider> = auth.map(|p| unsafe {
+            std::mem::transmute::<&dyn AuthProvider, &'static dyn AuthProvider>(p)
+                as *const dyn AuthProvider
+        });
+
+        sandbox::reset_instruction_counter(&self.lua, &self.config);
+
+        self.lua.scope(|scope| {
+            let ecs_proxy = unsafe {
+                EcsProxy::new(
+                    ctx.ecs as *mut EcsAdapter,
+                    &self.component_registry as *const ScriptComponentRegistry,
+                )
+            };
+            let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
+            let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
+
+            let ecs_ud = scope.create_userdata(ecs_proxy)?;
+            let space_ud = scope.create_userdata(space_proxy)?;
+            let output_ud = scope.create_userdata(output_proxy)?;
+            let session_ud = scope.create_userdata(session_proxy)?;
+
+            self.lua.globals().set("ecs", ecs_ud)?;
+            self.lua.globals().set("space", space_ud)?;
+            self.lua.globals().set("output", output_ud)?;
+            self.lua.globals().set("sessions", session_ud)?;
+
+            if let Some(ptr) = auth_ptr {
+                let auth_proxy = unsafe { AuthProxy::new(ptr) };
+                let auth_ud = scope.create_userdata(auth_proxy)?;
+                self.lua.globals().set("auth", auth_ud)?;
+            }
+
+            let hooks = self.lua.app_data_ref::<HookRegistry>().unwrap();
+            for key in &hooks.on_input {
+                let func: Function = self.lua.registry_value(key)?;
+                if let Err(e) = func.call::<()>((session_id.0, line.to_string())) {
+                    warn!("on_input hook error: {}", e);
+                }
+            }
+
+            Ok(())
+        })?;
+
+        Ok(outputs)
+    }
+
+    /// Run on_disconnect hooks.
+    /// The `auth` parameter is optional — when Some, an `auth` global is set for Lua.
+    /// Returns collected session outputs.
+    pub fn run_on_disconnect<S: SpaceModel + IntoSpaceKind>(
+        &self,
+        ctx: &mut ScriptContext<'_, S>,
+        session_id: SessionId,
+        auth: Option<&dyn AuthProvider>,
+    ) -> Result<Vec<SessionOutput>, ScriptError> {
+        let hooks = self.lua.app_data_ref::<HookRegistry>().unwrap();
+        if hooks.on_disconnect.is_empty() {
+            return Ok(Vec::new());
+        }
+        drop(hooks);
+
+        let mut outputs = Vec::new();
+        // SAFETY: We convert the reference to a raw pointer to avoid lifetime issues
+        // with the scope closure. The pointer is only used within the scope below,
+        // and auth is guaranteed to outlive it (same tick-thread, synchronous call).
+        let auth_ptr: Option<*const dyn AuthProvider> = auth.map(|p| unsafe {
+            std::mem::transmute::<&dyn AuthProvider, &'static dyn AuthProvider>(p)
+                as *const dyn AuthProvider
+        });
+
+        sandbox::reset_instruction_counter(&self.lua, &self.config);
+
+        self.lua.scope(|scope| {
+            let ecs_proxy = unsafe {
+                EcsProxy::new(
+                    ctx.ecs as *mut EcsAdapter,
+                    &self.component_registry as *const ScriptComponentRegistry,
+                )
+            };
+            let space_proxy = unsafe { SpaceProxy::from_space(ctx.space as *mut S) };
+            let output_proxy = unsafe { OutputProxy::new(&mut outputs as *mut Vec<SessionOutput>) };
+            let session_proxy = unsafe { SessionProxy::new(ctx.sessions as *mut SessionManager) };
+
+            let ecs_ud = scope.create_userdata(ecs_proxy)?;
+            let space_ud = scope.create_userdata(space_proxy)?;
+            let output_ud = scope.create_userdata(output_proxy)?;
+            let session_ud = scope.create_userdata(session_proxy)?;
+
+            self.lua.globals().set("ecs", ecs_ud)?;
+            self.lua.globals().set("space", space_ud)?;
+            self.lua.globals().set("output", output_ud)?;
+            self.lua.globals().set("sessions", session_ud)?;
+
+            if let Some(ptr) = auth_ptr {
+                let auth_proxy = unsafe { AuthProxy::new(ptr) };
+                let auth_ud = scope.create_userdata(auth_proxy)?;
+                self.lua.globals().set("auth", auth_ud)?;
+            }
+
+            let hooks = self.lua.app_data_ref::<HookRegistry>().unwrap();
+            for key in &hooks.on_disconnect {
+                let func: Function = self.lua.registry_value(key)?;
+                if let Err(e) = func.call::<()>(session_id.0) {
+                    warn!("on_disconnect hook error: {}", e);
+                }
+            }
+
+            Ok(())
+        })?;
+
+        Ok(outputs)
     }
 
     /// Get a reference to the underlying Lua VM.
@@ -713,11 +851,11 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 42,
         };
 
@@ -741,11 +879,11 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 5,
         };
 
@@ -771,12 +909,12 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let entity = ecs.spawn_entity();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
 
@@ -809,12 +947,12 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let entity = ecs.spawn_entity();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
 
@@ -833,12 +971,12 @@ mod tests {
     fn test_run_on_action_no_handler() {
         let engine = ScriptEngine::new(ScriptConfig::default()).unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let entity = ecs.spawn_entity();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
 
@@ -869,14 +1007,14 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let entity = EntityId::new(1, 0);
         let room = EntityId::new(100, 0);
 
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
 
@@ -902,11 +1040,11 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
 
@@ -941,7 +1079,7 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let entity = ecs.spawn_entity();
         ecs.set_component(entity, Health { current: 10, max: 10 })
             .unwrap();
@@ -949,7 +1087,7 @@ mod tests {
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
 
@@ -988,11 +1126,11 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 0,
         };
         let outputs = engine.run_on_init(&mut ctx).unwrap();
@@ -1023,11 +1161,11 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 0,
         };
         let outputs = engine.run_on_init(&mut ctx).unwrap();
@@ -1065,11 +1203,11 @@ mod tests {
             )
             .unwrap();
 
-        let (mut ecs, mut space, sessions) = setup_world();
+        let (mut ecs, mut space, mut sessions) = setup_world();
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut space,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
         let outputs = engine.run_on_tick(&mut ctx).unwrap();
@@ -1103,7 +1241,7 @@ mod tests {
             origin_x: 0,
             origin_y: 0,
         });
-        let sessions = SessionManager::new();
+        let mut sessions = SessionManager::new();
 
         let entity = ecs.spawn_entity();
         grid.set_position(entity, 3, 4).unwrap();
@@ -1111,7 +1249,7 @@ mod tests {
         let mut ctx = ScriptContext {
             ecs: &mut ecs,
             space: &mut grid,
-            sessions: &sessions,
+            sessions: &mut sessions,
             tick: 1,
         };
 

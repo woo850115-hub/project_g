@@ -224,6 +224,13 @@ hooks.on_action("inventory", function(ctx)
     return true
 end)
 
+-- gold
+hooks.on_action("gold", function(ctx)
+    local gold = ecs:get(ctx.entity, "Gold") or 0
+    output:send(ctx.session_id, colors.yellow .. "보유 골드: " .. tostring(gold) .. colors.reset)
+    return true
+end)
+
 -- say
 hooks.on_action("say", function(ctx)
     local entity = ctx.entity

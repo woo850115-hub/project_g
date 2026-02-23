@@ -337,6 +337,78 @@ impl ScriptComponent for InventoryHandler {
     }
 }
 
+/// Handler for Skills { learned: Vec<String> } — explicitly handles sequence conversion.
+struct SkillsHandler;
+
+impl ScriptComponent for SkillsHandler {
+    fn tag(&self) -> &str {
+        "Skills"
+    }
+
+    fn get_as_lua(
+        &self,
+        ecs: &EcsAdapter,
+        eid: EntityId,
+        lua: &Lua,
+    ) -> Result<Option<mlua::Value>, ScriptError> {
+        match ecs.get_component::<Skills>(eid) {
+            Ok(skills) => {
+                let table = lua.create_table().map_err(ScriptError::Lua)?;
+                let learned = lua.create_table().map_err(ScriptError::Lua)?;
+                for (i, skill_name) in skills.learned.iter().enumerate() {
+                    learned
+                        .set(i + 1, skill_name.as_str())
+                        .map_err(ScriptError::Lua)?;
+                }
+                table.set("learned", learned).map_err(ScriptError::Lua)?;
+                Ok(Some(mlua::Value::Table(table)))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn set_from_lua(
+        &self,
+        ecs: &mut EcsAdapter,
+        eid: EntityId,
+        value: mlua::Value,
+        _lua: &Lua,
+    ) -> Result<(), ScriptError> {
+        let table = match value {
+            mlua::Value::Table(t) => t,
+            _ => {
+                return Err(ScriptError::Lua(mlua::Error::runtime(
+                    "Skills expects a table with learned field",
+                )))
+            }
+        };
+        let learned_table: mlua::Table =
+            table.get("learned").map_err(ScriptError::Lua)?;
+        let mut learned = Vec::new();
+        for pair in learned_table.sequence_values::<String>() {
+            let name = pair.map_err(ScriptError::Lua)?;
+            learned.push(name);
+        }
+        ecs.set_component(eid, Skills { learned })
+            .map_err(|e| ScriptError::Lua(mlua::Error::runtime(e.to_string())))?;
+        Ok(())
+    }
+
+    fn has(&self, ecs: &EcsAdapter, eid: EntityId) -> bool {
+        ecs.has_component::<Skills>(eid)
+    }
+
+    fn remove(&self, ecs: &mut EcsAdapter, eid: EntityId) -> Result<(), ScriptError> {
+        ecs.remove_component::<Skills>(eid)
+            .map_err(|e| ScriptError::Lua(mlua::Error::runtime(e.to_string())))?;
+        Ok(())
+    }
+
+    fn entities_with(&self, ecs: &EcsAdapter) -> Vec<EntityId> {
+        ecs.entities_with::<Skills>()
+    }
+}
+
 /// Register all MUD component types with the script component registry.
 pub fn register_mud_script_components(registry: &mut ScriptComponentRegistry) {
     register::<Name>(registry, "Name");
@@ -351,4 +423,9 @@ pub fn register_mud_script_components(registry: &mut ScriptComponentRegistry) {
     registry.register(Box::new(InRoomHandler));
     registry.register(Box::new(CombatTargetHandler));
     register_tag::<Dead>(registry, "Dead");
+    register::<Race>(registry, "Race");
+    register::<Class>(registry, "Class");
+    register::<Level>(registry, "Level");
+    registry.register(Box::new(SkillsHandler));
+    register::<Gold>(registry, "Gold");
 }

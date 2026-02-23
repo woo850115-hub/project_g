@@ -68,4 +68,9 @@ pub fn register_mud_components(registry: &mut PersistenceRegistry) {
     register::<InRoom>(registry, "InRoom");
     register::<CombatTarget>(registry, "CombatTarget");
     register::<Dead>(registry, "Dead");
+    register::<Race>(registry, "Race");
+    register::<Class>(registry, "Class");
+    register::<Level>(registry, "Level");
+    register::<Skills>(registry, "Skills");
+    register::<Gold>(registry, "Gold");
 }
