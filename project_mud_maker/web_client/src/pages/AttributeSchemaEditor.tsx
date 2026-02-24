@@ -377,14 +377,14 @@ function DefaultValueEditor({ valueType, value, options, onChange }: DefaultValu
       const rangeVal = (value && typeof value === 'object' ? value : { current: 0, max: 0 }) as { current: number; max: number };
       return (
         <div className="flex items-center gap-2 flex-1">
-          <label className="text-xs text-gray-500">current</label>
+          <label className="text-xs text-gray-500">현재값</label>
           <input
             type="number"
             value={rangeVal.current}
             onChange={(e) => onChange({ ...rangeVal, current: Number(e.target.value) || 0 })}
             className="w-24 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm"
           />
-          <label className="text-xs text-gray-500">max</label>
+          <label className="text-xs text-gray-500">최대값</label>
           <input
             type="number"
             value={rangeVal.max}

@@ -8,6 +8,16 @@ import { Tooltip } from '../components/Tooltip';
 import { BalanceView } from '../components/BalanceView';
 import { useHistory } from '../hooks/useHistory';
 
+// Korean labels for collection names
+const COLLECTION_LABELS: Record<string, string> = {
+  monsters: '몬스터',
+  items: '아이템',
+  races: '종족',
+  classes: '직업',
+  skills: '스킬',
+  shops: '상점',
+};
+
 // Enum fields: collection → field → selectable options
 const ENUM_OPTIONS: Record<string, Record<string, { value: string; label: string }[]>> = {
   items: {
@@ -512,7 +522,7 @@ export function Database() {
                 <option value="">-- 선택 --</option>
                 {collections.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {COLLECTION_LABELS[c] || c}
                   </option>
                 ))}
               </select>

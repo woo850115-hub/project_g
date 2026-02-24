@@ -234,6 +234,14 @@ export function SelectDialog({
 
 // --- Add Field Dialog ---
 
+const TYPE_LABELS: Record<string, string> = {
+  string: '문자열',
+  number: '숫자',
+  boolean: '불리언',
+  array: '배열',
+  object: '객체',
+};
+
 interface FieldPreset {
   key: string;
   label: string;
@@ -281,7 +289,7 @@ export function AddFieldDialog({
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-blue-300 font-mono">{p.key}</span>
                   <span className="text-[10px] text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded group-hover:bg-gray-600">
-                    {p.type}
+                    {TYPE_LABELS[p.type] || p.type}
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">{p.desc}</div>

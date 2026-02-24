@@ -29,6 +29,11 @@ const ENTITY_TYPE_TO_COLLECTION: Record<string, string> = {
   item: 'items',
 };
 
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  npc: 'NPC',
+  item: '아이템',
+};
+
 function schemaToOverrideType(vt: string): 'number' | 'string' {
   return vt === 'number' || vt === 'range' ? 'number' : 'string';
 }
@@ -384,12 +389,12 @@ export function RoomPanel({ room, allRooms, zones, collections, onChange, onDele
                           ent.type === 'npc' ? 'text-red-400' : 'text-yellow-400'
                         }
                       >
-                        [{ent.type}]
+                        [{ENTITY_TYPE_LABELS[ent.type] || ent.type}]
                       </span>{' '}
                       <span className="text-gray-300">{ent.content_id}</span>
                       {hasOverrides && (
                         <span className="text-[9px] text-blue-400 bg-blue-400/10 px-1 rounded">
-                          override
+                          재정의
                         </span>
                       )}
                     </span>
