@@ -2,6 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { attributeSchemaApi, contentApi } from '../api/client';
 import type { AttributeSchema, AttributeValueType, SelectOption } from '../types/attribute_schema';
 
+const COLLECTION_LABELS: Record<string, string> = {
+  monsters: '몬스터',
+  items: '아이템',
+  races: '종족',
+  classes: '직업',
+  skills: '스킬',
+  shops: '상점',
+  quests: '퀘스트',
+  dialogues: '대화',
+  attribute_schema: '속성 스키마',
+};
+
 const VALUE_TYPE_LABELS: Record<AttributeValueType, string> = {
   number: '숫자',
   string: '문자열',
@@ -316,7 +328,7 @@ export function AttributeSchemaEditor() {
                       checked={editSchema.applies_to.includes(col)}
                       onChange={() => toggleAppliesTo(col)}
                     />
-                    {col}
+                    {COLLECTION_LABELS[col] || col}
                   </label>
                 ))}
                 {collections.length === 0 && (

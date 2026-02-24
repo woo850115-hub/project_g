@@ -16,6 +16,9 @@ const COLLECTION_LABELS: Record<string, string> = {
   classes: '직업',
   skills: '스킬',
   shops: '상점',
+  quests: '퀘스트',
+  dialogues: '대화',
+  attribute_schema: '속성 스키마',
 };
 
 // Enum fields: collection → field → selectable options
