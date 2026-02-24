@@ -1,3 +1,4 @@
+pub mod attribute_schemas;
 pub mod dialogues;
 pub mod items;
 pub mod quests;
@@ -27,6 +28,7 @@ pub fn router() -> Router<AppState> {
         .nest("/api/shops", shops::router())
         .nest("/api/dialogues", dialogues::router())
         .nest("/api/quests", quests::router())
+        .nest("/api/attribute-schemas", attribute_schemas::router())
         .route("/api/generate-all", post(generate_all))
         .route("/ws/logs", get(ws::ws_logs))
         .route("/ws/preview", get(ws::ws_preview))

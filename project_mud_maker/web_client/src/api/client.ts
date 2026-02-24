@@ -158,6 +158,20 @@ export const questApi = {
     request<GenerateResult>('/quests/generate', { method: 'POST' }),
 };
 
+// --- Attribute Schema API ---
+
+import type { AttributeSchema } from '../types/attribute_schema';
+
+export const attributeSchemaApi = {
+  list: () => request<AttributeSchema[]>('/attribute-schemas'),
+
+  save: (schemas: AttributeSchema[]) =>
+    request<ApiOk>('/attribute-schemas', {
+      method: 'PUT',
+      body: JSON.stringify(schemas),
+    }),
+};
+
 // --- Generate All API ---
 
 export const generateAllApi = {

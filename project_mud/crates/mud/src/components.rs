@@ -75,6 +75,28 @@ pub struct Skills {
 #[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Gold(pub i64);
 
+/// Generic ECS component holding arbitrary JSON data.
+/// Custom Serialize/Deserialize implementation to work with bincode:
+/// bincode stores the JSON as a string, then deserializes back.
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct GameData(pub serde_json::Value);
+
+impl Serialize for GameData {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let json_str = serde_json::to_string(&self.0).map_err(serde::ser::Error::custom)?;
+        serializer.serialize_str(&json_str)
+    }
+}
+
+impl<'de> Deserialize<'de> for GameData {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        let value: serde_json::Value =
+            serde_json::from_str(&s).map_err(serde::de::Error::custom)?;
+        Ok(GameData(value))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,5 +184,17 @@ mod tests {
         let bytes = bincode::serialize(&skills).unwrap();
         let decoded: Skills = bincode::deserialize(&bytes).unwrap();
         assert_eq!(skills, decoded);
+    }
+
+    #[test]
+    fn game_data_bincode_roundtrip() {
+        let data = GameData(serde_json::json!({
+            "mp": {"current": 50, "max": 100},
+            "exp_reward": 25,
+            "is_friendly": false
+        }));
+        let bytes = bincode::serialize(&data).unwrap();
+        let decoded: GameData = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(data, decoded);
     }
 }

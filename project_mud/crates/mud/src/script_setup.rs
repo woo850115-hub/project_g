@@ -428,4 +428,57 @@ pub fn register_mud_script_components(registry: &mut ScriptComponentRegistry) {
     register::<Level>(registry, "Level");
     registry.register(Box::new(SkillsHandler));
     register::<Gold>(registry, "Gold");
+    registry.register(Box::new(GameDataHandler));
+}
+
+/// Handler for GameData(serde_json::Value) — directly passes JSON value without
+/// going through GameData's custom Serialize (which converts to string for bincode).
+struct GameDataHandler;
+
+impl ScriptComponent for GameDataHandler {
+    fn tag(&self) -> &str {
+        "GameData"
+    }
+
+    fn get_as_lua(
+        &self,
+        ecs: &EcsAdapter,
+        eid: EntityId,
+        lua: &Lua,
+    ) -> Result<Option<mlua::Value>, ScriptError> {
+        match ecs.get_component::<GameData>(eid) {
+            Ok(gd) => {
+                let lua_val = lua.to_value(&gd.0).map_err(ScriptError::Lua)?;
+                Ok(Some(lua_val))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn set_from_lua(
+        &self,
+        ecs: &mut EcsAdapter,
+        eid: EntityId,
+        value: mlua::Value,
+        lua: &Lua,
+    ) -> Result<(), ScriptError> {
+        let json_val: serde_json::Value = lua.from_value(value).map_err(ScriptError::Lua)?;
+        ecs.set_component(eid, GameData(json_val))
+            .map_err(|e| ScriptError::Lua(mlua::Error::runtime(e.to_string())))?;
+        Ok(())
+    }
+
+    fn has(&self, ecs: &EcsAdapter, eid: EntityId) -> bool {
+        ecs.has_component::<GameData>(eid)
+    }
+
+    fn remove(&self, ecs: &mut EcsAdapter, eid: EntityId) -> Result<(), ScriptError> {
+        ecs.remove_component::<GameData>(eid)
+            .map_err(|e| ScriptError::Lua(mlua::Error::runtime(e.to_string())))?;
+        Ok(())
+    }
+
+    fn entities_with(&self, ecs: &EcsAdapter) -> Vec<EntityId> {
+        ecs.entities_with::<GameData>()
+    }
 }

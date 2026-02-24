@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Layout, type TabId } from './components/Layout';
 import { MapEditor } from './pages/MapEditor';
 import { Database } from './pages/Database';
+import { AttributeSchemaEditor } from './pages/AttributeSchemaEditor';
 import { TriggerEditor } from './pages/TriggerEditor';
 import { DialogueEditor } from './pages/DialogueEditor';
 import { QuestEditor } from './pages/QuestEditor';
@@ -15,6 +16,7 @@ function App() {
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'map' && <MapEditor />}
       {activeTab === 'database' && <Database />}
+      {activeTab === 'attributes' && <AttributeSchemaEditor />}
       {activeTab === 'triggers' && <TriggerEditor />}
       {activeTab === 'dialogues' && <DialogueEditor />}
       {activeTab === 'quests' && <QuestEditor />}

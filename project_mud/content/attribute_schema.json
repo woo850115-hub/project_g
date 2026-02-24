@@ -1,0 +1,52 @@
+[
+  {
+    "id": "mp",
+    "label": "마나",
+    "description": "마법 사용에 필요한 마나",
+    "category": "전투",
+    "value_type": "range",
+    "default": { "current": 100, "max": 100 },
+    "applies_to": ["monsters"],
+    "options": []
+  },
+  {
+    "id": "exp_reward",
+    "label": "경험치 보상",
+    "description": "처치 시 획득 경험치",
+    "category": "보상",
+    "value_type": "number",
+    "default": 0,
+    "applies_to": ["monsters"],
+    "options": []
+  },
+  {
+    "id": "loot_table",
+    "label": "드랍 테이블",
+    "description": "드랍 아이템 ID 목록",
+    "category": "보상",
+    "value_type": "tags",
+    "default": [],
+    "applies_to": ["monsters"],
+    "options": []
+  },
+  {
+    "id": "is_friendly",
+    "label": "우호적",
+    "description": "공격 불가 NPC 여부",
+    "category": "행동",
+    "value_type": "boolean",
+    "default": false,
+    "applies_to": ["monsters"],
+    "options": []
+  },
+  {
+    "id": "dialogue",
+    "label": "대사",
+    "description": "NPC 대화 텍스트",
+    "category": "행동",
+    "value_type": "string",
+    "default": "",
+    "applies_to": ["monsters"],
+    "options": []
+  }
+]

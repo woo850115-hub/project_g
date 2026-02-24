@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import { contentApi, itemEffectsApi, shopApi } from '../api/client';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { contentApi, itemEffectsApi, shopApi, attributeSchemaApi } from '../api/client';
 import type { ContentItem } from '../types/content';
+import type { AttributeSchema } from '../types/attribute_schema';
 import { PromptDialog, ConfirmDialog, AddFieldDialog } from '../components/Modal';
 import type { FieldPreset } from '../components/Modal';
 import { Tooltip } from '../components/Tooltip';
@@ -36,9 +37,6 @@ const ENUM_OPTIONS: Record<string, Record<string, { value: string; label: string
 
 // Fields that reference IDs from another collection
 const REF_FIELDS: Record<string, Record<string, { refCollection: string; multiple: boolean }>> = {
-  monsters: {
-    loot_table: { refCollection: 'items', multiple: true },
-  },
   races: {
     racial_skill: { refCollection: 'skills', multiple: false },
   },
@@ -54,10 +52,11 @@ const FIELD_PRESETS: Record<string, FieldPreset[]> = {
     { key: 'hp', label: '체력', desc: '최대 체력 (HP)', type: 'number' },
     { key: 'attack', label: '공격력', desc: '기본 공격력', type: 'number' },
     { key: 'defense', label: '방어력', desc: '기본 방어력', type: 'number' },
-    { key: 'exp_reward', label: '경험치 보상', desc: '처치 시 획득 경험치', type: 'number' },
-    { key: 'loot_table', label: '드랍 테이블', desc: '드랍 아이템 ID 목록 (배열)', type: 'array' },
-    { key: 'is_friendly', label: '우호적', desc: '공격 불가 NPC 여부', type: 'boolean' },
-    { key: 'dialogue', label: '대사', desc: 'NPC 대화 텍스트', type: 'string' },
+    { key: 'level', label: '레벨', desc: 'NPC 레벨 (Level 컴포넌트 설정)', type: 'number' },
+    { key: 'gold', label: '소지 골드', desc: 'NPC가 보유한 골드', type: 'number' },
+    { key: 'race', label: '종족', desc: 'NPC 종족 (Race 컴포넌트)', type: 'string' },
+    { key: 'class', label: '직업', desc: 'NPC 직업 (Class 컴포넌트)', type: 'string' },
+    { key: 'skills', label: '스킬', desc: 'NPC 보유 스킬 ID 목록 (배열)', type: 'array' },
   ],
   items: [
     { key: 'name', label: '이름', desc: '아이템 표시 이름', type: 'string' },
@@ -96,6 +95,30 @@ const FIELD_PRESETS: Record<string, FieldPreset[]> = {
   ],
 };
 
+// Convert schema value_type to FieldPreset type
+function schemaToPresetType(vt: string): 'string' | 'number' | 'boolean' | 'array' | 'object' {
+  switch (vt) {
+    case 'number': return 'number';
+    case 'boolean': return 'boolean';
+    case 'tags': return 'array';
+    case 'range': return 'object';
+    default: return 'string';
+  }
+}
+
+// Get the default value for a schema attribute
+function schemaDefaultValue(schema: AttributeSchema): unknown {
+  switch (schema.value_type) {
+    case 'number': return typeof schema.default === 'number' ? schema.default : 0;
+    case 'string': return typeof schema.default === 'string' ? schema.default : '';
+    case 'boolean': return typeof schema.default === 'boolean' ? schema.default : false;
+    case 'range': return schema.default && typeof schema.default === 'object' ? schema.default : { current: 0, max: 0 };
+    case 'select': return typeof schema.default === 'string' ? schema.default : '';
+    case 'tags': return Array.isArray(schema.default) ? schema.default : [];
+    default: return '';
+  }
+}
+
 export function Database() {
   const [collections, setCollections] = useState<string[]>([]);
   const [activeCollection, setActiveCollection] = useState<string | null>(null);
@@ -110,6 +133,7 @@ export function Database() {
   const [refItems, setRefItems] = useState<Record<string, ContentItem[]>>({});
   const [viewMode, setViewMode] = useState<'edit' | 'balance'>('edit');
   const [allCollectionItems, setAllCollectionItems] = useState<Record<string, ContentItem[]>>({});
+  const [attrSchemas, setAttrSchemas] = useState<AttributeSchema[]>([]);
 
   // Dialog states
   const [addItemDialog, setAddItemDialog] = useState(false);
@@ -174,10 +198,34 @@ export function Database() {
     } catch { /* skip */ }
   }, []);
 
+  // Load attribute schemas
+  const loadAttrSchemas = useCallback(async () => {
+    try {
+      const data = await attributeSchemaApi.list();
+      setAttrSchemas(data);
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     loadCollections();
     loadRefCollections();
-  }, [loadCollections, loadRefCollections]);
+    loadAttrSchemas();
+  }, [loadCollections, loadRefCollections, loadAttrSchemas]);
+
+  // Merge FIELD_PRESETS with attribute schemas for the active collection
+  const mergedPresets = useMemo((): FieldPreset[] => {
+    const base = activeCollection ? (FIELD_PRESETS[activeCollection] || []) : [];
+    const schemaPresets: FieldPreset[] = attrSchemas
+      .filter((s) => s.applies_to.length === 0 || (activeCollection && s.applies_to.includes(activeCollection)))
+      .filter((s) => !base.some((p) => p.key === s.id))
+      .map((s) => ({
+        key: s.id,
+        label: s.label,
+        desc: s.description || `${s.label} (${s.value_type})`,
+        type: schemaToPresetType(s.value_type),
+      }));
+    return [...base, ...schemaPresets];
+  }, [activeCollection, attrSchemas]);
 
   useEffect(() => {
     loadItems();
@@ -215,15 +263,34 @@ export function Database() {
     }
   };
 
-  // Add new item
+  // Add new item (auto-populate FIELD_PRESETS + schema defaults)
   const handleAddItem = async (id: string) => {
     if (!activeCollection) return;
     setAddItemDialog(false);
     try {
-      await contentApi.updateItem(activeCollection, id, { id } as ContentItem);
+      const initial: Record<string, unknown> = { id };
+      // Apply base presets
+      const presets = FIELD_PRESETS[activeCollection];
+      if (presets) {
+        for (const p of presets) {
+          if (p.key === 'id') continue;
+          initial[p.key] = p.type === 'number' ? 0
+            : p.type === 'boolean' ? false
+            : p.type === 'array' ? []
+            : p.type === 'object' ? {}
+            : '';
+        }
+      }
+      // Apply schema defaults
+      for (const schema of attrSchemas) {
+        if (schema.applies_to.length > 0 && !schema.applies_to.includes(activeCollection)) continue;
+        if (initial[schema.id] !== undefined) continue;
+        initial[schema.id] = schemaDefaultValue(schema);
+      }
+      await contentApi.updateItem(activeCollection, id, initial as ContentItem);
       await loadItems();
       setActiveItemId(id);
-      editHistory.replace({ id });
+      editHistory.replace(initial);
     } catch (e) {
       setError(e instanceof Error ? e.message : '\uCD94\uAC00 \uC2E4\uD328');
     }
@@ -406,7 +473,7 @@ export function Database() {
       />
       <AddFieldDialog
         open={addFieldDialog}
-        presets={activeCollection ? (FIELD_PRESETS[activeCollection] || []) : []}
+        presets={mergedPresets}
         existingKeys={Object.keys(editData)}
         onSelect={handleAddField}
         onCancel={() => setAddFieldDialog(false)}
@@ -578,9 +645,7 @@ export function Database() {
               {Object.entries(editData).map(([key, value]) => {
                 const enumOpts = activeCollection ? ENUM_OPTIONS[activeCollection]?.[key] : undefined;
                 const refField = activeCollection ? REF_FIELDS[activeCollection]?.[key] : undefined;
-                const presetInfo = activeCollection
-                  ? FIELD_PRESETS[activeCollection]?.find((p) => p.key === key)
-                  : undefined;
+                const presetInfo = mergedPresets.find((p) => p.key === key);
                 const fieldLabel = presetInfo ? `${key}` : key;
                 const fieldHint = presetInfo?.desc;
 

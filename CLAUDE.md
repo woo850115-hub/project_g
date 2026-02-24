@@ -43,10 +43,12 @@ Rust 기반 MUD/2D MMORPG 겸용 게임 엔진. 공유 엔진 코어 위에 Text
   - 콘텐츠 API: GET/PUT/DELETE /api/content/:collection/:id (파일 기반 JSON CRUD)
   - 스크립트 API: GET/PUT/DELETE /api/scripts/:filename (Lua 파일 CRUD)
   - 서버 관리 API: /api/server/start|stop|restart|status (자식 프로세스 관리)
-  - 프론트엔드: 탭 레이아웃 (Map/Database/Scripts/Preview), 데이터베이스 탭 구현
+  - 속성 스키마 API: GET/PUT /api/attribute-schemas (커스텀 속성 정의 CRUD)
+  - 프론트엔드: 탭 레이아웃 (Map/Database/속성 스키마/Triggers/Dialogues/Quests/Scripts/Preview)
+  - 속성 스키마: attribute_schema.json 기반 커스텀 속성 정의 → GameData ECS 컴포넌트로 저장
   - 향후: project_2d_maker 추가 예정 (maker_common 공유)
 
-**현재 테스트: 337개 전체 통과**
+**현재 테스트: 338개 전체 통과**
 
 ## 문서 위치
 
