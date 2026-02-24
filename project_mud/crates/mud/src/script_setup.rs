@@ -409,6 +409,83 @@ impl ScriptComponent for SkillsHandler {
     }
 }
 
+/// Handler for CharacterPosition enum — Lua sees/sets a lowercase string ("standing", "sitting", etc.)
+struct CharacterPositionHandler;
+
+impl ScriptComponent for CharacterPositionHandler {
+    fn tag(&self) -> &str {
+        "Position"
+    }
+
+    fn get_as_lua(
+        &self,
+        ecs: &EcsAdapter,
+        eid: EntityId,
+        _lua: &Lua,
+    ) -> Result<Option<mlua::Value>, ScriptError> {
+        match ecs.get_component::<CharacterPosition>(eid) {
+            Ok(pos) => {
+                let s = match pos {
+                    CharacterPosition::Standing => "standing",
+                    CharacterPosition::Sitting => "sitting",
+                    CharacterPosition::Resting => "resting",
+                    CharacterPosition::Sleeping => "sleeping",
+                    CharacterPosition::Fighting => "fighting",
+                    CharacterPosition::Incapacitated => "incapacitated",
+                };
+                Ok(Some(mlua::Value::String(
+                    _lua.create_string(s).map_err(ScriptError::Lua)?,
+                )))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn set_from_lua(
+        &self,
+        ecs: &mut EcsAdapter,
+        eid: EntityId,
+        value: mlua::Value,
+        _lua: &Lua,
+    ) -> Result<(), ScriptError> {
+        let s: String = match value {
+            mlua::Value::String(s) => s.to_str().map_err(|e| ScriptError::Lua(mlua::Error::runtime(e.to_string())))?.to_string(),
+            _ => return Err(ScriptError::Lua(mlua::Error::runtime(
+                "Position expects a string (standing/sitting/resting/sleeping/fighting/incapacitated)",
+            ))),
+        };
+        let pos = match s.as_str() {
+            "standing" => CharacterPosition::Standing,
+            "sitting" => CharacterPosition::Sitting,
+            "resting" => CharacterPosition::Resting,
+            "sleeping" => CharacterPosition::Sleeping,
+            "fighting" => CharacterPosition::Fighting,
+            "incapacitated" => CharacterPosition::Incapacitated,
+            other => return Err(ScriptError::Lua(mlua::Error::runtime(format!(
+                "Unknown position: '{}'. Valid: standing, sitting, resting, sleeping, fighting, incapacitated",
+                other
+            )))),
+        };
+        ecs.set_component(eid, pos)
+            .map_err(|e| ScriptError::Lua(mlua::Error::runtime(e.to_string())))?;
+        Ok(())
+    }
+
+    fn has(&self, ecs: &EcsAdapter, eid: EntityId) -> bool {
+        ecs.has_component::<CharacterPosition>(eid)
+    }
+
+    fn remove(&self, ecs: &mut EcsAdapter, eid: EntityId) -> Result<(), ScriptError> {
+        ecs.remove_component::<CharacterPosition>(eid)
+            .map_err(|e| ScriptError::Lua(mlua::Error::runtime(e.to_string())))?;
+        Ok(())
+    }
+
+    fn entities_with(&self, ecs: &EcsAdapter) -> Vec<EntityId> {
+        ecs.entities_with::<CharacterPosition>()
+    }
+}
+
 /// Register all MUD component types with the script component registry.
 pub fn register_mud_script_components(registry: &mut ScriptComponentRegistry) {
     register::<Name>(registry, "Name");
@@ -426,6 +503,9 @@ pub fn register_mud_script_components(registry: &mut ScriptComponentRegistry) {
     register::<Race>(registry, "Race");
     register::<Class>(registry, "Class");
     register::<Level>(registry, "Level");
+    register::<Mana>(registry, "Mana");
+    register::<Experience>(registry, "Experience");
+    registry.register(Box::new(CharacterPositionHandler));
     registry.register(Box::new(SkillsHandler));
     register::<Gold>(registry, "Gold");
     registry.register(Box::new(GameDataHandler));

@@ -81,7 +81,8 @@ fn spawn_player(
     ecs.set_component(entity, Attack(10)).unwrap();
     ecs.set_component(entity, Defense(3)).unwrap();
     ecs.set_component(entity, Inventory::new()).unwrap();
-    ecs.set_component(entity, Level { level: 1, exp: 0, exp_next: 100 }).unwrap();
+    ecs.set_component(entity, Level(1)).unwrap();
+    ecs.set_component(entity, Experience(0)).unwrap();
     ecs.set_component(entity, Skills { learned: vec!["강타".to_string()] }).unwrap();
     space.place_entity(entity, room).unwrap();
     sessions.bind_entity(sid, entity);

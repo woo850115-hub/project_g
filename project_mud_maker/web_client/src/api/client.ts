@@ -172,6 +172,20 @@ export const attributeSchemaApi = {
     }),
 };
 
+// --- Level Table API ---
+
+import type { LevelEntry } from '../types/level_table';
+
+export const levelTableApi = {
+  list: () => request<LevelEntry[]>('/level-table'),
+
+  save: (table: LevelEntry[]) =>
+    request<ApiOk>('/level-table', {
+      method: 'PUT',
+      body: JSON.stringify(table),
+    }),
+};
+
 // --- Generate All API ---
 
 export const generateAllApi = {

@@ -17,6 +17,7 @@ const BASE_OVERRIDE_FIELDS: Record<string, { key: string; label: string; type: '
     { key: 'defense', label: '방어력', type: 'number' },
     { key: 'level', label: '레벨', type: 'number' },
     { key: 'gold', label: '골드', type: 'number' },
+    { key: 'mana', label: '마나', type: 'number' },
   ],
   item: [
     { key: 'name', label: '이름', type: 'string' },

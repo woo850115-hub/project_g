@@ -71,6 +71,9 @@ pub fn register_mud_components(registry: &mut PersistenceRegistry) {
     register::<Race>(registry, "Race");
     register::<Class>(registry, "Class");
     register::<Level>(registry, "Level");
+    register::<Mana>(registry, "Mana");
+    register::<Experience>(registry, "Experience");
+    register::<CharacterPosition>(registry, "Position");
     register::<Skills>(registry, "Skills");
     register::<Gold>(registry, "Gold");
     register::<GameData>(registry, "GameData");

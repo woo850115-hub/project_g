@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { generateAllApi, serverApi } from '../api/client';
 
-export type TabId = 'map' | 'database' | 'attributes' | 'triggers' | 'dialogues' | 'quests' | 'scripts' | 'preview';
+export type TabId = 'map' | 'database' | 'scripts' | 'preview';
 
 interface LayoutProps {
   activeTab: TabId;
@@ -12,10 +12,6 @@ interface LayoutProps {
 const tabs: { id: TabId; label: string }[] = [
   { id: 'map', label: '맵' },
   { id: 'database', label: '데이터베이스' },
-  { id: 'attributes', label: '속성 스키마' },
-  { id: 'triggers', label: '트리거' },
-  { id: 'dialogues', label: '대화' },
-  { id: 'quests', label: '퀘스트' },
   { id: 'scripts', label: '스크립트' },
   { id: 'preview', label: '미리보기' },
 ];

@@ -406,7 +406,7 @@ fn generate_world_lua(world: &WorldData, state: &AppState) -> String {
     // ECS component keys (not GameData)
     let ecs_keys: &[&str] = &[
         "id", "name", "description", "hp", "attack", "defense",
-        "gold", "level", "race", "class", "skills",
+        "gold", "level", "race", "class", "skills", "mana",
     ];
 
     // Place entities in rooms
@@ -494,13 +494,23 @@ fn generate_world_lua(world: &WorldData, state: &AppState) -> String {
                                 "    ecs:set({ent_var}, \"Gold\", {gold})\n"
                             ));
                         }
-                        // Level
+                        // Level + Experience
                         if let Some(level) =
                             get_override_or_content_i64(&placed.overrides, c, "level")
                         {
-                            let exp_next = level * 100;
                             lua.push_str(&format!(
-                                "    ecs:set({ent_var}, \"Level\", {{level = {level}, exp = 0, exp_next = {exp_next}}})\n"
+                                "    ecs:set({ent_var}, \"Level\", {level})\n"
+                            ));
+                            lua.push_str(&format!(
+                                "    ecs:set({ent_var}, \"Experience\", 0)\n"
+                            ));
+                        }
+                        // Mana
+                        if let Some(mana) =
+                            get_override_or_content_i64(&placed.overrides, c, "mana")
+                        {
+                            lua.push_str(&format!(
+                                "    ecs:set({ent_var}, \"Mana\", {{current = {mana}, max = {mana}}})\n"
                             ));
                         }
                         // Race
@@ -703,10 +713,10 @@ fn generate_content_data(lua: &mut String, state: &AppState) {
     for entry in collections {
         let path = entry.path();
         let collection = path.file_stem().unwrap().to_string_lossy().to_string();
-        // Skip non-content files (world, shops, dialogues, quests, attribute_schema are handled separately)
+        // Skip non-content files (world, shops, dialogues, quests, attribute_schema, level_table are handled separately)
         if matches!(
             collection.as_str(),
-            "world" | "shops" | "dialogues" | "quests" | "attribute_schema"
+            "world" | "shops" | "dialogues" | "quests" | "attribute_schema" | "level_table"
         ) {
             continue;
         }
@@ -743,6 +753,20 @@ fn generate_content_data(lua: &mut String, state: &AppState) {
         lua.push_str("CONTENT_DATA = CONTENT_DATA or {}\n");
         for part in &data_parts {
             lua.push_str(part);
+        }
+        lua.push('\n');
+    }
+
+    // Generate level_table global (indexed by level number)
+    let level_entries = super::level_table::load_level_table_sync(state);
+    if !level_entries.is_empty() {
+        lua.push_str("-- Level table (indexed by level)\n");
+        lua.push_str("level_table = {}\n");
+        for entry in &level_entries {
+            lua.push_str(&format!(
+                "level_table[{}] = {{exp_required = {}, hp_bonus = {}, mp_bonus = {}, atk_bonus = {}, def_bonus = {}}}\n",
+                entry.level, entry.exp_required, entry.hp_bonus, entry.mp_bonus, entry.atk_bonus, entry.def_bonus
+            ));
         }
         lua.push('\n');
     }

@@ -16,7 +16,10 @@
       "id": "spawn_room",
       "name": "시작의 방",
       "description": "따뜻하고 환한 방입니다. 벽에 안내문이 붙어 있습니다: '환영합니다, 모험가여!'",
-      "position": { "x": 0, "y": 200 },
+      "position": {
+        "x": 0.0,
+        "y": 200.0
+      },
       "exits": {
         "east": "market_square"
       },
@@ -27,14 +30,20 @@
       "id": "market_square",
       "name": "시장 광장",
       "description": "활기찬 시장 광장입니다. 상인들이 물건을 팔고 있습니다.",
-      "position": { "x": 250, "y": 200 },
+      "position": {
+        "x": 250.0,
+        "y": 200.0
+      },
       "exits": {
-        "west": "spawn_room",
         "east": "dark_alley",
-        "south": "weapon_shop"
+        "south": "weapon_shop",
+        "west": "spawn_room"
       },
       "entities": [
-        { "type": "item", "content_id": "healing_potion" }
+        {
+          "type": "item",
+          "content_id": "치유_물약"
+        }
       ],
       "zone_id": "town"
     },
@@ -42,7 +51,10 @@
       "id": "dark_alley",
       "name": "어두운 골목",
       "description": "좁고 어두운 골목입니다. 쥐들이 달아나는 소리가 들립니다.",
-      "position": { "x": 500, "y": 200 },
+      "position": {
+        "x": 500.0,
+        "y": 200.0
+      },
       "exits": {
         "west": "market_square"
       },
@@ -53,7 +65,10 @@
       "id": "weapon_shop",
       "name": "무기 상점",
       "description": "벽에 칼, 도끼, 활이 진열되어 있습니다. 주인이 당신을 지켜보고 있습니다.",
-      "position": { "x": 250, "y": 400 },
+      "position": {
+        "x": 250.0,
+        "y": 400.0
+      },
       "exits": {
         "north": "market_square",
         "south": "dungeon_entrance"
@@ -65,10 +80,13 @@
       "id": "dungeon_entrance",
       "name": "던전 입구",
       "description": "어두운 계단이 지하로 내려갑니다. 차가운 바람이 올라오고 있습니다.",
-      "position": { "x": 250, "y": 600 },
+      "position": {
+        "x": 250.0,
+        "y": 600.0
+      },
       "exits": {
-        "north": "weapon_shop",
-        "east": "dungeon_floor1"
+        "east": "dungeon_floor1",
+        "north": "weapon_shop"
       },
       "entities": [],
       "zone_id": "dungeon"
@@ -77,12 +95,18 @@
       "id": "dungeon_floor1",
       "name": "던전 1층",
       "description": "축축한 석조 방입니다. 횃불이 벽에서 흔들리고 있습니다.",
-      "position": { "x": 500, "y": 600 },
+      "position": {
+        "x": 500.0,
+        "y": 600.0
+      },
       "exits": {
         "west": "dungeon_entrance"
       },
       "entities": [
-        { "type": "npc", "content_id": "goblin" }
+        {
+          "type": "npc",
+          "content_id": "goblin"
+        }
       ],
       "zone_id": "dungeon"
     }

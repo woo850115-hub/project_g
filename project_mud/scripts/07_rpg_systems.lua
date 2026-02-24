@@ -21,35 +21,43 @@ end
 
 --- Award experience to an entity. Returns true if leveled up.
 function award_exp(entity, amount)
-    local level_data = ecs:get(entity, "Level")
-    if not level_data then return false end
-
-    level_data.exp = level_data.exp + amount
+    local level = ecs:get(entity, "Level") or 1
+    local exp = ecs:get(entity, "Experience") or 0
+    exp = exp + amount
     local leveled_up = false
 
-    while level_data.exp >= level_data.exp_next do
-        level_data.exp = level_data.exp - level_data.exp_next
-        level_data.level = level_data.level + 1
-        level_data.exp_next = level_data.level * 100
+    local entry = level_table and level_table[level]
+    while entry and exp >= entry.exp_required do
+        exp = exp - entry.exp_required
+        level = level + 1
 
-        -- Stat bonuses on level up
+        -- Apply level table bonuses
         local hp = ecs:get(entity, "Health")
         if hp then
-            hp.max = hp.max + 5
+            hp.max = hp.max + entry.hp_bonus
             hp.current = hp.max  -- Full heal on level up
             ecs:set(entity, "Health", hp)
         end
 
+        local mp = ecs:get(entity, "Mana")
+        if mp then
+            mp.max = mp.max + entry.mp_bonus
+            mp.current = mp.max  -- Full restore on level up
+            ecs:set(entity, "Mana", mp)
+        end
+
         local atk = ecs:get(entity, "Attack") or 0
-        ecs:set(entity, "Attack", atk + 1)
+        ecs:set(entity, "Attack", atk + entry.atk_bonus)
 
         local def = ecs:get(entity, "Defense") or 0
-        ecs:set(entity, "Defense", def + 1)
+        ecs:set(entity, "Defense", def + entry.def_bonus)
 
         leveled_up = true
+        entry = level_table and level_table[level]
     end
 
-    ecs:set(entity, "Level", level_data)
+    ecs:set(entity, "Level", level)
+    ecs:set(entity, "Experience", exp)
     return leveled_up
 end
 
@@ -268,10 +276,8 @@ hooks.on_action("use_skill", function(ctx)
                 output:send(sid, colors.bright_yellow .. "경험치 +" .. tostring(exp) .. colors.reset)
 
                 if leveled then
-                    local new_level = ecs:get(entity, "Level")
-                    if new_level then
-                        output:send(sid, colors.bold .. colors.bright_yellow .. "레벨 업! Lv." .. tostring(new_level.level) .. colors.reset)
-                    end
+                    local new_level = ecs:get(entity, "Level") or 1
+                    output:send(sid, colors.bold .. colors.bright_yellow .. "레벨 업! Lv." .. tostring(new_level) .. colors.reset)
                 end
 
                 -- Award gold from loot_table

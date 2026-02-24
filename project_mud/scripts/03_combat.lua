@@ -124,18 +124,15 @@ hooks.on_tick(function(tick)
         for _, round in ipairs(rounds) do
             if round.target == dead_entity and ecs:has(round.attacker, "PlayerTag") and ecs:has(dead_entity, "NpcTag") then
                 local exp = calc_exp_reward(dead_entity)
-                local old_level_data = ecs:get(round.attacker, "Level")
-                local old_level = old_level_data and old_level_data.level or nil
+                local old_level = ecs:get(round.attacker, "Level") or 1
 
                 local leveled = award_exp(round.attacker, exp)
                 local killer_sid = sessions:session_for(round.attacker)
                 if killer_sid then
                     output:send(killer_sid, colors.bright_yellow .. "경험치 +" .. tostring(exp) .. colors.reset)
                     if leveled then
-                        local new_level_data = ecs:get(round.attacker, "Level")
-                        if new_level_data then
-                            output:send(killer_sid, colors.bold .. colors.bright_yellow .. "레벨 업! Lv." .. tostring(new_level_data.level) .. colors.reset)
-                        end
+                        local new_level = ecs:get(round.attacker, "Level") or 1
+                        output:send(killer_sid, colors.bold .. colors.bright_yellow .. "레벨 업! Lv." .. tostring(new_level) .. colors.reset)
                     end
                 end
 

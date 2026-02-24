@@ -617,9 +617,15 @@ fn save_character_state(
         components.insert("Class".to_string(), serde_json::json!(class.0));
     }
     if let Ok(level) = ecs.get_component::<Level>(entity) {
+        components.insert("Level".to_string(), serde_json::json!(level.0));
+    }
+    if let Ok(exp) = ecs.get_component::<Experience>(entity) {
+        components.insert("Experience".to_string(), serde_json::json!(exp.0));
+    }
+    if let Ok(mana) = ecs.get_component::<Mana>(entity) {
         components.insert(
-            "Level".to_string(),
-            serde_json::json!({"level": level.level, "exp": level.exp, "exp_next": level.exp_next}),
+            "Mana".to_string(),
+            serde_json::json!({"current": mana.current, "max": mana.max}),
         );
     }
     if let Ok(skills) = ecs.get_component::<Skills>(entity) {

@@ -7,19 +7,32 @@ import type { FieldPreset } from '../components/Modal';
 import { Tooltip } from '../components/Tooltip';
 import { BalanceView } from '../components/BalanceView';
 import { useHistory } from '../hooks/useHistory';
+import { TriggerEditor } from './TriggerEditor';
+import { DialogueEditor } from './DialogueEditor';
+import { QuestEditor } from './QuestEditor';
+import { AttributeSchemaEditor } from './AttributeSchemaEditor';
+import { LevelTableEditor } from './LevelTableEditor';
 
-// Korean labels for collection names
-const COLLECTION_LABELS: Record<string, string> = {
-  monsters: '몬스터',
-  items: '아이템',
-  races: '종족',
-  classes: '직업',
-  skills: '스킬',
-  shops: '상점',
-  quests: '퀘스트',
-  dialogues: '대화',
-  attribute_schema: '속성 스키마',
-};
+// Sub-tab definitions
+interface SubTab {
+  id: string;
+  label: string;
+  type: 'collection' | 'editor';
+}
+
+const SUB_TABS: SubTab[] = [
+  { id: 'monsters', label: '몬스터', type: 'collection' },
+  { id: 'items', label: '아이템', type: 'collection' },
+  { id: 'races', label: '종족', type: 'collection' },
+  { id: 'classes', label: '직업', type: 'collection' },
+  { id: 'skills', label: '스킬', type: 'collection' },
+  { id: 'shops', label: '상점', type: 'collection' },
+  { id: 'triggers', label: '트리거', type: 'editor' },
+  { id: 'dialogues', label: '대화', type: 'editor' },
+  { id: 'quests', label: '퀘스트', type: 'editor' },
+  { id: 'attributes', label: '속성 스키마', type: 'editor' },
+  { id: 'level-table', label: '레벨 테이블', type: 'editor' },
+];
 
 // Enum fields: collection → field → selectable options
 const ENUM_OPTIONS: Record<string, Record<string, { value: string; label: string }[]>> = {
@@ -70,6 +83,7 @@ const FIELD_PRESETS: Record<string, FieldPreset[]> = {
     { key: 'race', label: '종족', desc: 'NPC 종족 (Race 컴포넌트)', type: 'string' },
     { key: 'class', label: '직업', desc: 'NPC 직업 (Class 컴포넌트)', type: 'string' },
     { key: 'skills', label: '스킬', desc: 'NPC 보유 스킬 ID 목록 (배열)', type: 'array' },
+    { key: 'mana', label: '마나', desc: '최대 마나 (MP)', type: 'number' },
   ],
   items: [
     { key: 'name', label: '이름', desc: '아이템 표시 이름', type: 'string' },
@@ -133,8 +147,8 @@ function schemaDefaultValue(schema: AttributeSchema): unknown {
 }
 
 export function Database() {
-  const [collections, setCollections] = useState<string[]>([]);
-  const [activeCollection, setActiveCollection] = useState<string | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState('monsters');
+  const [activeCollection, setActiveCollection] = useState<string>('monsters');
   const [items, setItems] = useState<ContentItem[]>([]);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const editHistory = useHistory<Record<string, unknown>>({});
@@ -151,22 +165,22 @@ export function Database() {
   // Dialog states
   const [addItemDialog, setAddItemDialog] = useState(false);
   const [deleteItemDialog, setDeleteItemDialog] = useState(false);
-  const [addCollectionDialog, setAddCollectionDialog] = useState(false);
-  const [deleteCollectionDialog, setDeleteCollectionDialog] = useState(false);
   const [addFieldDialog, setAddFieldDialog] = useState(false);
 
-  // Load collections
-  const loadCollections = useCallback(async () => {
-    try {
-      const cols = await contentApi.listCollections();
-      setCollections(cols);
-      if (cols.length > 0 && !activeCollection) {
-        setActiveCollection(cols[0]);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '\uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
+  // Determine current sub-tab type
+  const currentSubTab = SUB_TABS.find((t) => t.id === activeSubTab);
+  const isEditorTab = currentSubTab?.type === 'editor';
+
+  // Handle sub-tab switch
+  const handleSubTabChange = (tabId: string) => {
+    setActiveSubTab(tabId);
+    const tab = SUB_TABS.find((t) => t.id === tabId);
+    if (tab?.type === 'collection') {
+      setActiveCollection(tabId);
+      setSearchQuery('');
+      setViewMode('edit');
     }
-  }, [activeCollection]);
+  };
 
   // Load items when collection changes
   const loadItems = useCallback(async () => {
@@ -176,8 +190,8 @@ export function Database() {
       setItems(data);
       setActiveItemId(null);
       editHistory.replace({});
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '\uC544\uC774\uD15C \uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328');
+    } catch {
+      setItems([]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCollection]);
@@ -220,10 +234,9 @@ export function Database() {
   }, []);
 
   useEffect(() => {
-    loadCollections();
     loadRefCollections();
     loadAttrSchemas();
-  }, [loadCollections, loadRefCollections, loadAttrSchemas]);
+  }, [loadRefCollections, loadAttrSchemas]);
 
   // Merge FIELD_PRESETS with attribute schemas for the active collection
   const mergedPresets = useMemo((): FieldPreset[] => {
@@ -244,7 +257,7 @@ export function Database() {
     loadItems();
   }, [loadItems]);
 
-  // Select item for editing (replace = don't push to history on initial selection)
+  // Select item for editing
   const selectItem = (item: ContentItem) => {
     setActiveItemId(item.id);
     editHistory.replace({ ...item });
@@ -282,7 +295,6 @@ export function Database() {
     setAddItemDialog(false);
     try {
       const initial: Record<string, unknown> = { id };
-      // Apply base presets
       const presets = FIELD_PRESETS[activeCollection];
       if (presets) {
         for (const p of presets) {
@@ -294,7 +306,6 @@ export function Database() {
             : '';
         }
       }
-      // Apply schema defaults
       for (const schema of attrSchemas) {
         if (schema.applies_to.length > 0 && !schema.applies_to.includes(activeCollection)) continue;
         if (initial[schema.id] !== undefined) continue;
@@ -318,32 +329,6 @@ export function Database() {
       setActiveItemId(null);
       editHistory.replace({});
       await loadItems();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '\uC0AD\uC81C \uC2E4\uD328');
-    }
-  };
-
-  // Add new collection
-  const handleAddCollection = async (id: string) => {
-    setAddCollectionDialog(false);
-    try {
-      await contentApi.createCollection(id);
-      await loadCollections();
-      setActiveCollection(id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '\uC0DD\uC131 \uC2E4\uD328');
-    }
-  };
-
-  // Delete collection
-  const handleDeleteCollection = async () => {
-    if (!activeCollection) return;
-    setDeleteCollectionDialog(false);
-    try {
-      await contentApi.deleteCollection(activeCollection);
-      setActiveCollection(null);
-      setItems([]);
-      await loadCollections();
     } catch (e) {
       setError(e instanceof Error ? e.message : '\uC0AD\uC81C \uC2E4\uD328');
     }
@@ -402,8 +387,8 @@ export function Database() {
   // Handle switching from balance to edit with item selection
   const handleBalanceSelect = (collection: string, itemId: string) => {
     setViewMode('edit');
+    setActiveSubTab(collection);
     setActiveCollection(collection);
-    // Items will load from the collection change; queue item selection
     setTimeout(async () => {
       try {
         const colItems = await contentApi.listItems(collection);
@@ -417,30 +402,8 @@ export function Database() {
     }, 100);
   };
 
-  // Balance view mode
-  if (viewMode === 'balance') {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-700 bg-gray-800">
-          <button
-            onClick={() => setViewMode('edit')}
-            className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded"
-          >
-            편집
-          </button>
-          <button
-            className="px-3 py-1 text-xs bg-blue-600 rounded"
-          >
-            밸런스
-          </button>
-        </div>
-        <BalanceView collections={allCollectionItems} onSelectItem={handleBalanceSelect} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col h-full">
       {/* Error toast */}
       {error && (
         <div className="fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded shadow-lg z-50">
@@ -451,396 +414,380 @@ export function Database() {
         </div>
       )}
 
-      {/* Dialogs */}
-      <PromptDialog
-        open={addItemDialog}
-        title="아이템 추가"
-        label="아이템 ID"
-        placeholder="예: goblin_warrior"
-        onSubmit={handleAddItem}
-        onCancel={() => setAddItemDialog(false)}
-      />
-      <ConfirmDialog
-        open={deleteItemDialog}
-        title="아이템 삭제"
-        message={`${activeCollection}에서 "${activeItemId}"을(를) 삭제하시겠습니까?`}
-        confirmLabel="삭제"
-        onConfirm={handleDeleteItem}
-        onCancel={() => setDeleteItemDialog(false)}
-      />
-      <PromptDialog
-        open={addCollectionDialog}
-        title="새 컬렉션"
-        label="컬렉션 이름"
-        placeholder="예: monsters"
-        onSubmit={handleAddCollection}
-        onCancel={() => setAddCollectionDialog(false)}
-      />
-      <ConfirmDialog
-        open={deleteCollectionDialog}
-        title="컬렉션 삭제"
-        message={`"${activeCollection}" 컬렉션과 모든 아이템을 삭제하시겠습니까?`}
-        confirmLabel="삭제"
-        onConfirm={handleDeleteCollection}
-        onCancel={() => setDeleteCollectionDialog(false)}
-      />
-      <AddFieldDialog
-        open={addFieldDialog}
-        presets={mergedPresets}
-        existingKeys={Object.keys(editData)}
-        onSelect={handleAddField}
-        onCancel={() => setAddFieldDialog(false)}
-      />
-
-      {/* Left sidebar — collections + items */}
-      <div className="w-64 border-r border-gray-700 bg-gray-800 flex flex-col">
-        {/* View mode toggle */}
-        <div className="flex items-center gap-1 px-3 pt-2">
-          <button
-            onClick={() => setViewMode('edit')}
-            className="px-2 py-0.5 text-xs bg-blue-600 rounded"
-          >
-            편집
-          </button>
-          <button
-            onClick={() => { loadRefCollections(); setViewMode('balance'); }}
-            className="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded"
-          >
-            밸런스
-          </button>
-        </div>
-
-        {/* Collection selector */}
-        <div className="p-3 border-b border-gray-700">
-          <div className="flex items-center gap-2 mb-2">
-            <Tooltip text="게임 콘텐츠 종류를 선택합니다 (예: monsters, items)">
-              <select
-                className="flex-1 bg-gray-700 text-sm rounded px-2 py-1.5 border border-gray-600"
-                value={activeCollection || ''}
-                onChange={(e) => {
-                  setActiveCollection(e.target.value || null);
-                  setSearchQuery('');
-                }}
-              >
-                <option value="">-- 선택 --</option>
-                {collections.map((c) => (
-                  <option key={c} value={c}>
-                    {COLLECTION_LABELS[c] || c}
-                  </option>
-                ))}
-              </select>
-            </Tooltip>
-          </div>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setAddCollectionDialog(true)}
-              className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded"
-            >
-              + 새로 만들기
-            </button>
-            {activeCollection && (
-              <button
-                onClick={() => setDeleteCollectionDialog(true)}
-                className="text-xs px-2 py-1 bg-red-700 hover:bg-red-600 rounded"
-              >
-                삭제
-              </button>
+      {/* Sub-tab bar */}
+      <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-700 bg-gray-800/80 shrink-0">
+        {SUB_TABS.map((tab, i) => (
+          <span key={tab.id} className="flex items-center">
+            {/* Separator between collection and editor groups */}
+            {i > 0 && SUB_TABS[i - 1].type !== tab.type && (
+              <span className="w-px h-5 bg-gray-600 mx-1.5" />
             )}
-          </div>
-        </div>
-
-        {/* Search bar */}
-        {activeCollection && (
-          <div className="px-3 py-2 border-b border-gray-700">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="아이템 검색..."
-              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs"
-            />
-          </div>
-        )}
-
-        {/* Item list */}
-        <div className="flex-1 overflow-y-auto">
-          {filteredItems.map((item) => (
             <button
-              key={item.id}
-              onClick={() => selectItem(item)}
-              className={`w-full text-left px-3 py-2 text-sm border-b border-gray-700 transition-colors ${
-                activeItemId === item.id
-                  ? 'bg-blue-900/40 text-blue-300'
-                  : 'hover:bg-gray-700/50'
+              onClick={() => handleSubTabChange(tab.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                activeSubTab === tab.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
               }`}
             >
-              <div className="truncate">{(item.name as string) || item.id}</div>
-              {typeof item.name === 'string' && item.name && (
-                <div className="text-[10px] text-gray-500 truncate">{item.id}</div>
-              )}
+              {tab.label}
             </button>
-          ))}
-          {activeCollection && filteredItems.length === 0 && (
-            <div className="p-3 text-xs text-gray-500 text-center">
-              {searchQuery ? '검색 결과 없음' : '아이템이 없습니다'}
-            </div>
-          )}
-        </div>
+          </span>
+        ))}
 
-        {/* Add item button */}
-        {activeCollection && (
-          <div className="p-2 border-t border-gray-700">
+        {/* Balance view toggle (only for collection tabs) */}
+        {!isEditorTab && (
+          <div className="ml-auto flex gap-1">
             <button
-              onClick={() => setAddItemDialog(true)}
-              className="w-full text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 rounded"
+              onClick={() => setViewMode('edit')}
+              className={`px-2 py-1 text-xs rounded ${
+                viewMode === 'edit' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
+              }`}
             >
-              + 아이템 추가
+              편집
+            </button>
+            <button
+              onClick={() => { loadRefCollections(); setViewMode('balance'); }}
+              className={`px-2 py-1 text-xs rounded ${
+                viewMode === 'balance' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              밸런스
             </button>
           </div>
         )}
       </div>
 
-      {/* Right panel — item editor */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {activeItemId && activeCollection === 'shops' ? (
-          /* ===== Shop dedicated editor ===== */
-          <ShopEditor
-            editData={editData}
-            updateField={updateField}
-            availableItems={allCollectionItems['items'] || []}
-            saving={saving}
-            onSave={saveItem}
-            onDelete={() => setDeleteItemDialog(true)}
-            onGenerateLua={generateShopLua}
-            editHistory={editHistory}
+      {/* Content area */}
+      {isEditorTab ? (
+        /* Dedicated editor for triggers/dialogues/quests/attributes */
+        activeSubTab === 'triggers' ? <TriggerEditor /> :
+        activeSubTab === 'dialogues' ? <DialogueEditor /> :
+        activeSubTab === 'quests' ? <QuestEditor /> :
+        activeSubTab === 'attributes' ? <AttributeSchemaEditor /> :
+        activeSubTab === 'level-table' ? <LevelTableEditor /> :
+        null
+      ) : viewMode === 'balance' ? (
+        /* Balance view */
+        <BalanceView collections={allCollectionItems} onSelectItem={handleBalanceSelect} />
+      ) : (
+        /* Collection editor */
+        <>
+          {/* Dialogs */}
+          <PromptDialog
+            open={addItemDialog}
+            title="아이템 추가"
+            label="아이템 ID"
+            placeholder="예: goblin_warrior"
+            onSubmit={handleAddItem}
+            onCancel={() => setAddItemDialog(false)}
           />
-        ) : activeItemId ? (
-          <>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">
-                {(editData.name as string) || activeItemId}
-              </h2>
-              <div className="flex gap-2">
+          <ConfirmDialog
+            open={deleteItemDialog}
+            title="아이템 삭제"
+            message={`${activeCollection}에서 "${activeItemId}"을(를) 삭제하시겠습니까?`}
+            confirmLabel="삭제"
+            onConfirm={handleDeleteItem}
+            onCancel={() => setDeleteItemDialog(false)}
+          />
+          <AddFieldDialog
+            open={addFieldDialog}
+            presets={mergedPresets}
+            existingKeys={Object.keys(editData)}
+            onSelect={handleAddField}
+            onCancel={() => setAddFieldDialog(false)}
+          />
+
+          <div className="flex flex-1 min-h-0">
+            {/* Left sidebar — item list */}
+            <div className="w-64 border-r border-gray-700 bg-gray-800 flex flex-col">
+              {/* Search bar */}
+              <div className="px-3 py-2 border-b border-gray-700">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="검색..."
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs"
+                />
+              </div>
+
+              {/* Item list */}
+              <div className="flex-1 overflow-y-auto">
+                {filteredItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => selectItem(item)}
+                    className={`w-full text-left px-3 py-2 text-sm border-b border-gray-700 transition-colors ${
+                      activeItemId === item.id
+                        ? 'bg-blue-900/40 text-blue-300'
+                        : 'hover:bg-gray-700/50'
+                    }`}
+                  >
+                    <div className="truncate">{(item.name as string) || item.id}</div>
+                    {typeof item.name === 'string' && item.name && (
+                      <div className="text-[10px] text-gray-500 truncate">{item.id}</div>
+                    )}
+                  </button>
+                ))}
+                {filteredItems.length === 0 && (
+                  <div className="p-3 text-xs text-gray-500 text-center">
+                    {searchQuery ? '검색 결과 없음' : '아이템이 없습니다'}
+                  </div>
+                )}
+              </div>
+
+              {/* Add item button */}
+              <div className="p-2 border-t border-gray-700">
                 <button
-                  onClick={editHistory.undo}
-                  disabled={!editHistory.canUndo}
-                  className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
-                  title="실행취소 (Ctrl+Z)"
+                  onClick={() => setAddItemDialog(true)}
+                  className="w-full text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 rounded"
                 >
-                  실행취소
-                </button>
-                <button
-                  onClick={editHistory.redo}
-                  disabled={!editHistory.canRedo}
-                  className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
-                  title="다시실행 (Ctrl+Y)"
-                >
-                  다시실행
-                </button>
-                <button
-                  onClick={saveItem}
-                  disabled={saving}
-                  className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded"
-                >
-                  {saving ? '저장 중...' : '저장'}
-                </button>
-                <button
-                  onClick={() => setDeleteItemDialog(true)}
-                  className="px-4 py-1.5 text-sm bg-red-700 hover:bg-red-600 rounded"
-                >
-                  삭제
+                  + 추가
                 </button>
               </div>
             </div>
 
-            {/* Dynamic form */}
-            <div className="space-y-4 max-w-2xl">
-              {Object.entries(editData).map(([key, value]) => {
-                const enumOpts = activeCollection ? ENUM_OPTIONS[activeCollection]?.[key] : undefined;
-                const refField = activeCollection ? REF_FIELDS[activeCollection]?.[key] : undefined;
-                const presetInfo = mergedPresets.find((p) => p.key === key);
-                const fieldLabel = presetInfo ? `${key}` : key;
-                const fieldHint = presetInfo?.desc;
-
-                return (
-                <div key={key} className="flex items-start gap-3">
-                  <Tooltip text={fieldHint || key}>
-                    <label className="w-32 text-sm text-gray-400 pt-2 text-right shrink-0">
-                      {fieldLabel}
-                    </label>
-                  </Tooltip>
-                  {key === 'id' ? (
-                    <input
-                      type="text"
-                      value={String(value ?? '')}
-                      disabled
-                      className="flex-1 bg-gray-700/50 text-gray-500 border border-gray-600 rounded px-3 py-1.5 text-sm"
-                    />
-                  ) : enumOpts ? (
-                    /* Enum field — select dropdown */
-                    <select
-                      value={String(value ?? '')}
-                      onChange={(e) => updateField(key, e.target.value)}
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
-                    >
-                      <option value="">-- 선택 --</option>
-                      {enumOpts.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  ) : refField && !refField.multiple ? (
-                    /* Single reference — select from other collection */
-                    <select
-                      value={String(value ?? '')}
-                      onChange={(e) => updateField(key, e.target.value || null)}
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
-                    >
-                      <option value="">없음</option>
-                      {(refItems[refField.refCollection] || []).map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {(item.name as string) || item.id}
-                        </option>
-                      ))}
-                    </select>
-                  ) : refField && refField.multiple && Array.isArray(value) ? (
-                    /* Multiple reference — tag list + add dropdown */
-                    <div className="flex-1">
-                      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-                        {(value as string[]).map((refId, i) => {
-                          const refItem = (refItems[refField.refCollection] || []).find((r) => r.id === refId);
-                          const display = refItem ? ((refItem.name as string) || refItem.id) : refId;
-                          return (
-                            <span
-                              key={i}
-                              className="inline-flex items-center gap-1 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs"
-                            >
-                              {display}
-                              <button
-                                onClick={() => {
-                                  const next = [...(value as string[])];
-                                  next.splice(i, 1);
-                                  updateField(key, next);
-                                }}
-                                className="text-gray-500 hover:text-red-400"
-                              >
-                                &times;
-                              </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            updateField(key, [...(value as string[]), e.target.value]);
-                            e.target.value = '';
-                          }
-                        }}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-400"
+            {/* Right panel — item editor */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {activeItemId && activeCollection === 'shops' ? (
+                <ShopEditor
+                  editData={editData}
+                  updateField={updateField}
+                  availableItems={allCollectionItems['items'] || []}
+                  saving={saving}
+                  onSave={saveItem}
+                  onDelete={() => setDeleteItemDialog(true)}
+                  onGenerateLua={generateShopLua}
+                  editHistory={editHistory}
+                />
+              ) : activeItemId ? (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold">
+                      {(editData.name as string) || activeItemId}
+                    </h2>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={editHistory.undo}
+                        disabled={!editHistory.canUndo}
+                        className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+                        title="실행취소 (Ctrl+Z)"
                       >
-                        <option value="">+ 추가...</option>
-                        {(refItems[refField.refCollection] || [])
-                          .filter((item) => !(value as string[]).includes(item.id))
-                          .map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {(item.name as string) || item.id}
-                            </option>
-                          ))}
-                      </select>
+                        실행취소
+                      </button>
+                      <button
+                        onClick={editHistory.redo}
+                        disabled={!editHistory.canRedo}
+                        className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-30 rounded"
+                        title="다시실행 (Ctrl+Y)"
+                      >
+                        다시실행
+                      </button>
+                      <button
+                        onClick={saveItem}
+                        disabled={saving}
+                        className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded"
+                      >
+                        {saving ? '저장 중...' : '저장'}
+                      </button>
+                      <button
+                        onClick={() => setDeleteItemDialog(true)}
+                        className="px-4 py-1.5 text-sm bg-red-700 hover:bg-red-600 rounded"
+                      >
+                        삭제
+                      </button>
                     </div>
-                  ) : typeof value === 'number' ? (
-                    <input
-                      type="number"
-                      value={value}
-                      onChange={(e) =>
-                        updateField(key, e.target.value === '' ? '' : Number(e.target.value))
-                      }
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
-                    />
-                  ) : typeof value === 'boolean' ? (
-                    <input
-                      type="checkbox"
-                      checked={value}
-                      onChange={(e) => updateField(key, e.target.checked)}
-                      className="mt-2"
-                    />
-                  ) : typeof value === 'object' && value !== null ? (
-                    <textarea
-                      value={JSON.stringify(value, null, 2)}
-                      onChange={(e) => {
-                        try {
-                          updateField(key, JSON.parse(e.target.value));
-                        } catch {
-                          // Allow intermediate invalid JSON while typing
-                        }
-                      }}
-                      rows={4}
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono"
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={String(value ?? '')}
-                      onChange={(e) => updateField(key, e.target.value)}
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
-                    />
-                  )}
-                  {key !== 'id' && (
-                    <button
-                      onClick={() => removeField(key)}
-                      className="text-gray-500 hover:text-red-400 text-sm pt-2"
-                      title="필드 제거"
-                    >
-                      x
-                    </button>
-                  )}
-                </div>
-                );
-              })}
-
-              <Tooltip text="이 아이템에 새로운 속성 필드를 추가합니다">
-                <button
-                  onClick={() => setAddFieldDialog(true)}
-                  className="text-sm text-blue-400 hover:text-blue-300"
-                >
-                  + 필드 추가
-                </button>
-              </Tooltip>
-
-              {/* Item effects preview for items collection */}
-              {activeCollection === 'items' && typeof editData.item_type === 'string' && (
-                <div className="mt-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-purple-400">효과 미리보기</span>
-                    <button
-                      onClick={generateItemEffects}
-                      className="text-xs px-2 py-1 bg-purple-700 hover:bg-purple-600 rounded"
-                    >
-                      효과 Lua 생성
-                    </button>
                   </div>
-                  <div className="text-xs text-gray-400 space-y-1">
-                    {editData.item_type === 'consumable' && (
-                      <p>사용 시 {(editData.heal_amount as number) || 0} HP 회복</p>
-                    )}
-                    {editData.item_type === 'weapon' && (
-                      <p>장착 시 공격력 +{(editData.attack_bonus as number) || 0}</p>
-                    )}
-                    {editData.item_type === 'armor' && (
-                      <p>장착 시 방어력 +{(editData.defense_bonus as number) || 0}</p>
+
+                  {/* Dynamic form */}
+                  <div className="space-y-4 max-w-2xl">
+                    {Object.entries(editData).map(([key, value]) => {
+                      const enumOpts = activeCollection ? ENUM_OPTIONS[activeCollection]?.[key] : undefined;
+                      const refField = activeCollection ? REF_FIELDS[activeCollection]?.[key] : undefined;
+                      const presetInfo = mergedPresets.find((p) => p.key === key);
+                      const fieldLabel = presetInfo ? `${key}` : key;
+                      const fieldHint = presetInfo?.desc;
+
+                      return (
+                      <div key={key} className="flex items-start gap-3">
+                        <Tooltip text={fieldHint || key}>
+                          <label className="w-32 text-sm text-gray-400 pt-2 text-right shrink-0">
+                            {fieldLabel}
+                          </label>
+                        </Tooltip>
+                        {key === 'id' ? (
+                          <input
+                            type="text"
+                            value={String(value ?? '')}
+                            disabled
+                            className="flex-1 bg-gray-700/50 text-gray-500 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                          />
+                        ) : enumOpts ? (
+                          <select
+                            value={String(value ?? '')}
+                            onChange={(e) => updateField(key, e.target.value)}
+                            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                          >
+                            <option value="">-- 선택 --</option>
+                            {enumOpts.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        ) : refField && !refField.multiple ? (
+                          <select
+                            value={String(value ?? '')}
+                            onChange={(e) => updateField(key, e.target.value || null)}
+                            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                          >
+                            <option value="">없음</option>
+                            {(refItems[refField.refCollection] || []).map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {(item.name as string) || item.id}
+                              </option>
+                            ))}
+                          </select>
+                        ) : refField && refField.multiple && Array.isArray(value) ? (
+                          <div className="flex-1">
+                            <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                              {(value as string[]).map((refId, i) => {
+                                const refItem = (refItems[refField.refCollection] || []).find((r) => r.id === refId);
+                                const display = refItem ? ((refItem.name as string) || refItem.id) : refId;
+                                return (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center gap-1 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs"
+                                  >
+                                    {display}
+                                    <button
+                                      onClick={() => {
+                                        const next = [...(value as string[])];
+                                        next.splice(i, 1);
+                                        updateField(key, next);
+                                      }}
+                                      className="text-gray-500 hover:text-red-400"
+                                    >
+                                      &times;
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  updateField(key, [...(value as string[]), e.target.value]);
+                                  e.target.value = '';
+                                }
+                              }}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-400"
+                            >
+                              <option value="">+ 추가...</option>
+                              {(refItems[refField.refCollection] || [])
+                                .filter((item) => !(value as string[]).includes(item.id))
+                                .map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {(item.name as string) || item.id}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        ) : typeof value === 'number' ? (
+                          <input
+                            type="number"
+                            value={value}
+                            onChange={(e) =>
+                              updateField(key, e.target.value === '' ? '' : Number(e.target.value))
+                            }
+                            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                          />
+                        ) : typeof value === 'boolean' ? (
+                          <input
+                            type="checkbox"
+                            checked={value}
+                            onChange={(e) => updateField(key, e.target.checked)}
+                            className="mt-2"
+                          />
+                        ) : typeof value === 'object' && value !== null ? (
+                          <textarea
+                            value={JSON.stringify(value, null, 2)}
+                            onChange={(e) => {
+                              try {
+                                updateField(key, JSON.parse(e.target.value));
+                              } catch {
+                                // Allow intermediate invalid JSON while typing
+                              }
+                            }}
+                            rows={4}
+                            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono"
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={String(value ?? '')}
+                            onChange={(e) => updateField(key, e.target.value)}
+                            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                          />
+                        )}
+                        {key !== 'id' && (
+                          <button
+                            onClick={() => removeField(key)}
+                            className="text-gray-500 hover:text-red-400 text-sm pt-2"
+                            title="필드 제거"
+                          >
+                            x
+                          </button>
+                        )}
+                      </div>
+                      );
+                    })}
+
+                    <Tooltip text="이 아이템에 새로운 속성 필드를 추가합니다">
+                      <button
+                        onClick={() => setAddFieldDialog(true)}
+                        className="text-sm text-blue-400 hover:text-blue-300"
+                      >
+                        + 필드 추가
+                      </button>
+                    </Tooltip>
+
+                    {/* Item effects preview for items collection */}
+                    {activeCollection === 'items' && typeof editData.item_type === 'string' && (
+                      <div className="mt-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-purple-400">효과 미리보기</span>
+                          <button
+                            onClick={generateItemEffects}
+                            className="text-xs px-2 py-1 bg-purple-700 hover:bg-purple-600 rounded"
+                          >
+                            효과 Lua 생성
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-1">
+                          {editData.item_type === 'consumable' && (
+                            <p>사용 시 {(editData.heal_amount as number) || 0} HP 회복</p>
+                          )}
+                          {editData.item_type === 'weapon' && (
+                            <p>장착 시 공격력 +{(editData.attack_bonus as number) || 0}</p>
+                          )}
+                          {editData.item_type === 'armor' && (
+                            <p>장착 시 방어력 +{(editData.defense_bonus as number) || 0}</p>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <p>편집할 아이템을 선택하세요</p>
                 </div>
               )}
             </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <p>{activeCollection ? '편집할 아이템을 선택하세요' : '컬렉션을 선택하세요'}</p>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

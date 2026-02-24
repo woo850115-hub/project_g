@@ -243,7 +243,6 @@ function format_status(eid)
     local name = get_name(eid)
     local race = ecs:get(eid, "Race") or "없음"
     local class = ecs:get(eid, "Class") or "없음"
-    local level_data = ecs:get(eid, "Level")
     local hp = ecs:get(eid, "Health")
     local atk = ecs:get(eid, "Attack") or 0
     local def = ecs:get(eid, "Defense") or 0
@@ -253,12 +252,19 @@ function format_status(eid)
     table.insert(lines, colors.bold .. colors.cyan .. "=== " .. name .. "의 상태 ===" .. colors.reset)
     table.insert(lines, "종족: " .. colors.yellow .. race .. colors.reset .. "  직업: " .. colors.yellow .. class .. colors.reset)
 
-    if level_data then
-        table.insert(lines, "레벨: " .. colors.bright_white .. tostring(level_data.level) .. colors.reset .. "  경험치: " .. tostring(level_data.exp) .. "/" .. tostring(level_data.exp_next))
-    end
+    local level = ecs:get(eid, "Level") or 1
+    local exp = ecs:get(eid, "Experience") or 0
+    local entry = level_table and level_table[level]
+    local exp_next = entry and entry.exp_required or "?"
+    table.insert(lines, "레벨: " .. colors.bright_white .. tostring(level) .. colors.reset .. "  경험치: " .. tostring(exp) .. "/" .. tostring(exp_next))
 
     if hp then
         table.insert(lines, "체력: " .. colors.green .. tostring(hp.current) .. "/" .. tostring(hp.max) .. colors.reset)
+    end
+
+    local mp = ecs:get(eid, "Mana")
+    if mp then
+        table.insert(lines, "마나: " .. colors.blue .. tostring(mp.current) .. "/" .. tostring(mp.max) .. colors.reset)
     end
 
     local gold = ecs:get(eid, "Gold") or 0

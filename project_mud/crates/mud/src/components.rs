@@ -61,10 +61,31 @@ pub struct Race(pub String);
 pub struct Class(pub String);
 
 #[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Level {
-    pub level: i32,
-    pub exp: i32,
-    pub exp_next: i32,
+pub struct Level(pub i32);
+
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Mana {
+    pub current: i32,
+    pub max: i32,
+}
+
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Experience(pub i64);
+
+#[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CharacterPosition {
+    Standing,
+    Sitting,
+    Resting,
+    Sleeping,
+    Fighting,
+    Incapacitated,
+}
+
+impl Default for CharacterPosition {
+    fn default() -> Self {
+        Self::Standing
+    }
 }
 
 #[derive(Component, Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -164,10 +185,34 @@ mod tests {
 
     #[test]
     fn level_bincode_roundtrip() {
-        let level = Level { level: 5, exp: 230, exp_next: 500 };
+        let level = Level(5);
         let bytes = bincode::serialize(&level).unwrap();
         let decoded: Level = bincode::deserialize(&bytes).unwrap();
         assert_eq!(level, decoded);
+    }
+
+    #[test]
+    fn mana_bincode_roundtrip() {
+        let mana = Mana { current: 50, max: 100 };
+        let bytes = bincode::serialize(&mana).unwrap();
+        let decoded: Mana = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(mana, decoded);
+    }
+
+    #[test]
+    fn experience_bincode_roundtrip() {
+        let exp = Experience(1234);
+        let bytes = bincode::serialize(&exp).unwrap();
+        let decoded: Experience = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(exp, decoded);
+    }
+
+    #[test]
+    fn character_position_bincode_roundtrip() {
+        let pos = CharacterPosition::Fighting;
+        let bytes = bincode::serialize(&pos).unwrap();
+        let decoded: CharacterPosition = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(pos, decoded);
     }
 
     #[test]
